@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   title: "Salla - Professional Wet & Dry Cleaning",
   description:
     "Salla offers professional wet cleaning and hydrocarbon dry cleaning with advanced technology and reliable processes.",
-
   openGraph: {
     title: "Salla - Professional Wet & Dry Cleaning",
     description:
@@ -43,7 +42,7 @@ export default function RootLayout({
               />
             </Link>
 
-            <nav className="flex gap-6 text-sm font-medium md:text-base">
+            <nav className="hidden gap-6 text-sm font-medium md:flex md:text-base">
               <Link href="/" className="hover:text-[#9cb2bf]">
                 About Us
               </Link>
@@ -57,6 +56,30 @@ export default function RootLayout({
                 Calculator
               </Link>
             </nav>
+
+            <details className="relative md:hidden">
+              <summary className="cursor-pointer list-none rounded-lg bg-[#546d83] px-4 py-2 text-sm font-semibold">
+                Menu
+              </summary>
+
+              <div className="absolute right-0 mt-3 flex w-44 flex-col overflow-hidden rounded-xl bg-white text-[#26364d] shadow-xl">
+                <Link href="/" className="px-4 py-3 hover:bg-[#eef2f4]">
+                  About Us
+                </Link>
+                <Link href="/services" className="px-4 py-3 hover:bg-[#eef2f4]">
+                  Services
+                </Link>
+                <Link href="/prices" className="px-4 py-3 hover:bg-[#eef2f4]">
+                  Prices
+                </Link>
+                <Link
+                  href="/calculator"
+                  className="px-4 py-3 hover:bg-[#eef2f4]"
+                >
+                  Calculator
+                </Link>
+              </div>
+            </details>
           </div>
         </header>
 
