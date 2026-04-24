@@ -36,6 +36,9 @@ export default function RootLayout({
               <Link href="/prices" className="hover:text-[#9cb2bf]">
                 Prices
               </Link>
+              <Link href="/calculator" className="hover:text-[#9cb2bf]">
+                Calculator
+              </Link>
             </nav>
           </div>
         </header>
