@@ -61,14 +61,19 @@ export async function POST(req: Request) {
       return !paid;
     });
 
-    return NextResponse.json({
-      success: orders.length > 0,
-      orders,
-      message:
-        orders.length > 0
-          ? "Active orders found"
-          : "No active orders found",
-    });
+return NextResponse.json({
+  success: orders.length > 0,
+  orders,
+  message:
+    orders.length > 0
+      ? "Active orders found"
+      : "No active orders found",
+  debug: {
+    totalFromCleanCloud: allOrders.length,
+    activeAfterFilter: orders.length,
+    firstOrder: allOrders[0] || null,
+  },
+});
   } catch (error) {
     console.error(error);
 
