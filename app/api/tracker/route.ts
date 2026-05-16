@@ -36,8 +36,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         api_token: apiKey,
         customerID,
-        from: "2026-01-01",
-        to: "2026-12-31",
+
       }),
     });
 
