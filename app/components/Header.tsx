@@ -9,6 +9,7 @@ const links = [
   { href: "/prices", label: "Prices" },
   { href: "/calculator", label: "Calculator" },
   { href: "/contact", label: "Contact Us" },
+  { href: "/tracker", label: "Track Order" },
 ];
 
 export default function Header() {
