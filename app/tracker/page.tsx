@@ -91,8 +91,19 @@ const getStepIndex = (status: string) => {
   
 
   return (
-    <main className="bg-[#c6c1bb] px-6 py-20">
-      <div className="mx-auto max-w-5xl rounded-3xl bg-white p-8 shadow-xl md:p-12">
+<main
+  className="relative min-h-screen overflow-hidden px-6 py-20"
+  style={{
+    backgroundColor: "#c6c1bb",
+    backgroundImage: "url('/pattern.png')",
+    backgroundSize: "700px",
+    backgroundRepeat: "repeat",
+  }}
+>
+
+  <div className="relative z-10 mx-auto max-w-5xl rounded-3xl bg-white p-8 shadow-xl md:p-12">
+
+    
         <h1 className="text-center text-4xl font-bold text-[#26364d] md:text-6xl">
           Track Your Order
         </h1>
