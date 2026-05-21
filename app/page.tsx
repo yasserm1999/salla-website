@@ -23,7 +23,7 @@ export default function Home() {
 
         <div className="absolute inset-0 bg-gradient-to-r from-[#26364d] via-[#26364d]/85 to-[#26364d]/10" />
 
-        <div className="relative mx-auto -mt-8 max-w-6xl px-6 pb-10">
+        <div className="relative mx-auto -mt-2 max-w-6xl px-6 pb-10">
           <div className="max-w-2xl">
             <img
               src="/logoa.png"
@@ -66,14 +66,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="relative mx-auto -mt-16 max-w-6xl px-6 pb-10">
-          <div className="mt-24 grid rounded-3xl bg-[#26364d]/95 p-6 text-white shadow-2xl backdrop-blur md:grid-cols-4">
-            <Feature icon={<Cpu />} title="Advanced Technology" />
-            <Feature icon={<ShieldCheck />} title="Reliable Processes" />
-            <Feature icon={<Users />} title="Skilled Team" />
-            <Feature icon={<Sparkles />} title="Premium Care" />
-          </div>
-        </div>
+
       </section>
 
       {/* ABOUT */}
