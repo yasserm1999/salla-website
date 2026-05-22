@@ -321,57 +321,61 @@ export default function PricesPage() {
         </div>
 
         {/* MOBILE COMPACT TABLE */}
-        <div className="relative z-20 mt-8 overflow-x-auto rounded-[24px] bg-white/90 shadow-xl backdrop-blur md:hidden">
-          <div className="min-w-full">
-            <div className="grid-cols-[1fr_0.9fr_0.9fr_0.9fr] bg-[#26364d] text-white">
-              <div className="px-4 py-4 text-sm font-bold">Item</div>
-              <div className="px-3 py-4 text-center text-sm font-bold">
-                Normal
-              </div>
-              <div className="px-3 py-4 text-center text-sm font-bold">
-                Dry
-              </div>
-              <div className="px-3 py-4 text-center text-sm font-bold">
-                WET
-              </div>
-            </div>
+<div className="relative z-20 mt-8 overflow-hidden rounded-[24px] bg-white/90 shadow-xl backdrop-blur md:hidden">
+  <div className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] rounded-t-[24px] bg-[#26364d] text-white">
+    <div className="px-3 py-4 text-sm font-bold">Item</div>
+    <div className="px-2 py-4 text-center text-xs font-bold leading-4">
+      Normal
+      <br />
+      Wash
+    </div>
+    <div className="px-2 py-4 text-center text-xs font-bold leading-4">
+      Hydro
+      <br />
+      Dry
+    </div>
+    <div className="px-2 py-4 text-center text-xs font-bold leading-4">
+      WET
+      <br />
+      Clean
+    </div>
+  </div>
 
-            {data[activeCategory].map((row) => (
-              <div
-                key={row.item}
-                className="grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr] border-b border-[#ece7e1] last:border-b-0"
-              >
-                <div className="px-4 py-4 text-sm font-bold text-[#26364d]">
-                  {row.item}
-                </div>
+  {data[activeCategory].map((row) => (
+    <div
+      key={row.item}
+      className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] border-b border-[#ece7e1] last:border-b-0"
+    >
+      <div className="px-3 py-4 text-sm font-bold leading-5 text-[#26364d]">
+        {row.item}
+      </div>
 
-                <MobileTableCell
-                  value={row.normal}
-                  recommended={row.recommended === "normal"}
-                  onClick={() =>
-                    setSelected(selected?.item === row.item ? null : row)
-                  }
-                />
+      <MobileTableCell
+        value={row.normal}
+        recommended={row.recommended === "normal"}
+        onClick={() =>
+          setSelected(selected?.item === row.item ? null : row)
+        }
+      />
 
-                <MobileTableCell
-                  value={row.dry}
-                  recommended={row.recommended === "dry"}
-                  onClick={() =>
-                    setSelected(selected?.item === row.item ? null : row)
-                  }
-                />
+      <MobileTableCell
+        value={row.dry}
+        recommended={row.recommended === "dry"}
+        onClick={() =>
+          setSelected(selected?.item === row.item ? null : row)
+        }
+      />
 
-                <MobileTableCell
-                  value={row.wet}
-                  recommended={row.recommended === "wet"}
-                  onClick={() =>
-                    setSelected(selected?.item === row.item ? null : row)
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+      <MobileTableCell
+        value={row.wet}
+        recommended={row.recommended === "wet"}
+        onClick={() =>
+          setSelected(selected?.item === row.item ? null : row)
+        }
+      />
+    </div>
+  ))}
+</div>
 
        {selected && (
   <div className="md:hidden">
@@ -472,7 +476,7 @@ function MobileTableCell({
 }) {
   if (value === "-") {
     return (
-      <div className="flex items-center justify-center border-l border-[#ece7e1] py-4 text-[#b8b1a8]">
+      <div className="flex items-center justify-center border-l border-[#ece7e1] py-4 text-lg text-[#b8b1a8]">
         —
       </div>
     );
@@ -483,7 +487,7 @@ function MobileTableCell({
       <button
         type="button"
         onClick={recommended ? onClick : undefined}
-        className={`rounded-xl border px-3 py-2 text-sm font-bold ${
+        className={`rounded-xl border px-2 py-2 text-sm font-bold ${
           recommended
             ? "border-[#d8b98a] bg-[#f8f1e7] text-[#b9925d]"
             : "border-transparent text-[#26364d]"
@@ -517,7 +521,7 @@ function RecommendationCard({
       className={
         desktop
           ? `absolute ${leftPosition} top-[72px] z-[120] w-[355px] -translate-x-1/2`
-          : "fixed left-1/2 top-1/2 z-[999] w-[88vw] max-w-[360px] -translate-x-1/2 -translate-y-1/2"
+          : "fixed left-1/2 top-[38%] z-[999] w-[88vw] max-w-[360px] -translate-x-1/2"
       }
     >
       <div className="relative rounded-[26px] bg-[#102845] p-5 text-white shadow-2xl md:p-6">
