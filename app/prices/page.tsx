@@ -244,7 +244,7 @@ export default function PricesPage() {
           </p>
         </div>
 
-        <div className="mt-8 flex gap-3 overflow-x-auto pb-2 md:mt-10 md:flex-wrap md:justify-center md:overflow-visible">
+        <div className="mt-8 grid grid-cols-2 gap-2 md:mt-10 md:flex md:flex-wrap md:justify-center">
           {categories.map((category) => (
             <button
               key={category}
@@ -252,7 +252,7 @@ export default function PricesPage() {
                 setActiveCategory(category);
                 setSelected(null);
               }}
-              className={`w-full rounded-2xl border px-4 py-3 text-center md:w-auto text-sm font-semibold transition md:px-7 md:text-base ${
+              className={`flex min-h-[56px] items-center justify-center rounded-2xl border px-2 py-2 text-center text-[12px] leading-4 font-semibold transition md:min-h-0 md:w-auto md:px-7 md:py-3 md:text-base ${
                 activeCategory === category
                   ? "border-[#26364d] bg-[#26364d]/95 text-white shadow-lg"
                   : "border-[#d8cbbd] bg-white/55 text-[#26364d] backdrop-blur hover:bg-white/80"
