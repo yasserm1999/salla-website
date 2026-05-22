@@ -322,8 +322,8 @@ export default function PricesPage() {
 
         {/* MOBILE COMPACT TABLE */}
         <div className="relative z-20 mt-8 overflow-x-auto rounded-[24px] bg-white/90 shadow-xl backdrop-blur md:hidden">
-          <div className="min-w-[560px]">
-            <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] bg-[#26364d] text-white">
+          <div className="min-w-full">
+            <div className="grid-cols-[1fr_0.9fr_0.9fr_0.9fr] bg-[#26364d] text-white">
               <div className="px-4 py-4 text-sm font-bold">Item</div>
               <div className="px-3 py-4 text-center text-sm font-bold">
                 Normal
@@ -339,7 +339,7 @@ export default function PricesPage() {
             {data[activeCategory].map((row) => (
               <div
                 key={row.item}
-                className="grid grid-cols-[1.2fr_1fr_1fr_1fr] border-b border-[#ece7e1] last:border-b-0"
+                className="grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr] border-b border-[#ece7e1] last:border-b-0"
               >
                 <div className="px-4 py-4 text-sm font-bold text-[#26364d]">
                   {row.item}
@@ -373,12 +373,14 @@ export default function PricesPage() {
           </div>
         </div>
 
-        {selected && (
-          <RecommendationCard
-            row={selected}
-            onClose={() => setSelected(null)}
-          />
-        )}
+       {selected && (
+  <div className="md:hidden">
+    <RecommendationCard
+      row={selected}
+      onClose={() => setSelected(null)}
+    />
+  </div>
+)}
 
         <div className="relative z-10 mt-10 grid rounded-3xl bg-[#26364d]/95 text-white shadow-2xl backdrop-blur md:grid-cols-4">
           <Feature
