@@ -252,7 +252,7 @@ export default function PricesPage() {
                 setActiveCategory(category);
                 setSelected(null);
               }}
-              className={`shrink-0 rounded-2xl border px-5 py-3 text-sm font-semibold transition md:px-7 md:text-base ${
+              className={`w-full rounded-2xl border px-4 py-3 text-center md:w-auto text-sm font-semibold transition md:px-7 md:text-base ${
                 activeCategory === category
                   ? "border-[#26364d] bg-[#26364d]/95 text-white shadow-lg"
                   : "border-[#d8cbbd] bg-white/55 text-[#26364d] backdrop-blur hover:bg-white/80"
