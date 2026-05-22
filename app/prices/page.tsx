@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import {
   Clock3,
   Crown,
   Droplets,
-  Flower2,
   Leaf,
   Settings,
   ShieldCheck,
   Shirt,
-  Sparkles,
   X,
 } from "lucide-react";
 
@@ -57,8 +56,7 @@ const data: Record<string, PriceItem[]> = {
       dry: "0.300",
       wet: "-",
       recommended: "normal",
-      reason:
-        "Normal Wash is sufficient for most daily-use cotton garments.",
+      reason: "Normal Wash is sufficient for most daily-use cotton garments.",
       suitable: "Regular cotton fabrics and daily-use garments",
     },
     {
@@ -102,7 +100,6 @@ const data: Record<string, PriceItem[]> = {
       suitable: "Omani caps and embroidered details",
     },
   ],
-
   Ladies: [
     {
       item: "Abaya",
@@ -135,7 +132,6 @@ const data: Record<string, PriceItem[]> = {
       suitable: "Delicate dresses and soft fabrics",
     },
   ],
-
   General: [
     {
       item: "Shirt",
@@ -143,8 +139,7 @@ const data: Record<string, PriceItem[]> = {
       dry: "0.500",
       wet: "0.600",
       recommended: "normal",
-      reason:
-        "Normal Wash is sufficient for standard daily shirts.",
+      reason: "Normal Wash is sufficient for standard daily shirts.",
       suitable: "Daily shirts and regular cotton blends",
     },
     {
@@ -168,7 +163,6 @@ const data: Record<string, PriceItem[]> = {
       suitable: "Suits, jackets, and structured garments",
     },
   ],
-
   "Kids' Wear": [
     {
       item: "Kids Shirt",
@@ -176,8 +170,7 @@ const data: Record<string, PriceItem[]> = {
       dry: "0.300",
       wet: "-",
       recommended: "normal",
-      reason:
-        "Normal Wash is suitable for most kids' daily garments.",
+      reason: "Normal Wash is suitable for most kids' daily garments.",
       suitable: "Daily kidswear",
     },
     {
@@ -191,7 +184,6 @@ const data: Record<string, PriceItem[]> = {
       suitable: "Regular kids dresses",
     },
   ],
-
   "Bedding & Household": [
     {
       item: "Bedsheet",
@@ -199,8 +191,7 @@ const data: Record<string, PriceItem[]> = {
       dry: "-",
       wet: "1.300",
       recommended: "normal",
-      reason:
-        "Normal Wash is sufficient for regular cotton bedsheets.",
+      reason: "Normal Wash is sufficient for regular cotton bedsheets.",
       suitable: "Cotton bedsheets and regular household fabrics",
     },
     {
@@ -230,7 +221,7 @@ export default function PricesPage() {
 
   return (
     <main
-      className="min-h-screen px-6 py-16"
+      className="min-h-screen px-4 py-12 md:px-6 md:py-16"
       style={{
         backgroundColor: "#c6c1bb",
         backgroundImage: "url('/pattern.png')",
@@ -244,12 +235,13 @@ export default function PricesPage() {
             Prices
           </h1>
 
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-[#546d83]">
-            Prices are shown in OMR. Recommended methods are highlighted per garment.
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[#546d83] md:text-lg">
+            Prices are shown in OMR. Recommended methods are highlighted per
+            garment.
           </p>
         </div>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-4">
+        <div className="mt-8 flex gap-3 overflow-x-auto pb-2 md:mt-10 md:flex-wrap md:justify-center md:overflow-visible">
           {categories.map((category) => (
             <button
               key={category}
@@ -257,7 +249,7 @@ export default function PricesPage() {
                 setActiveCategory(category);
                 setSelected(null);
               }}
-              className={`rounded-2xl border px-7 py-3 text-sm font-semibold transition md:text-base ${
+              className={`shrink-0 rounded-2xl border px-5 py-3 text-sm font-semibold transition md:px-7 md:text-base ${
                 activeCategory === category
                   ? "border-[#26364d] bg-[#26364d]/95 text-white shadow-lg"
                   : "border-[#d8cbbd] bg-white/55 text-[#26364d] backdrop-blur hover:bg-white/80"
@@ -268,13 +260,13 @@ export default function PricesPage() {
           ))}
         </div>
 
-        <div className="relative z-20 mt-12 overflow-visible rounded-[30px] bg-white/90 shadow-2xl backdrop-blur">
+        {/* DESKTOP TABLE */}
+        <div className="relative z-20 mt-10 hidden overflow-visible rounded-[30px] bg-white/90 shadow-2xl backdrop-blur md:block">
           <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] overflow-hidden rounded-t-[30px] bg-[#26364d] text-white">
             <div className="flex items-center gap-3 px-8 py-5 font-bold">
               <Shirt size={19} />
               Item
             </div>
-
             <HeaderCell icon={<Droplets size={18} />} label="Normal Wash" />
             <HeaderCell icon={<Shirt size={18} />} label="Hydro Dry Clean" />
             <HeaderCell icon={<Droplets size={18} />} label="WET Clean" />
@@ -314,30 +306,92 @@ export default function PricesPage() {
               />
 
               {selected?.item === row.item && (
-                <RecommendationCard row={row} />
+                <RecommendationCard
+                  row={row}
+                  onClose={() => setSelected(null)}
+                  desktop
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* MOBILE CARDS */}
+        <div className="mt-8 space-y-5 md:hidden">
+          {data[activeCategory].map((row) => (
+            <div
+              key={row.item}
+              className="rounded-[28px] bg-white/92 p-5 shadow-xl backdrop-blur"
+            >
+              <h2 className="text-xl font-bold text-[#26364d]">{row.item}</h2>
+
+              <div className="mt-5 space-y-3">
+                <MobilePriceRow
+                  label="Normal Wash"
+                  value={row.normal}
+                  recommended={row.recommended === "normal"}
+                  onClick={() =>
+                    setSelected(selected?.item === row.item ? null : row)
+                  }
+                />
+
+                <MobilePriceRow
+                  label="Hydro Dry Clean"
+                  value={row.dry}
+                  recommended={row.recommended === "dry"}
+                  onClick={() =>
+                    setSelected(selected?.item === row.item ? null : row)
+                  }
+                />
+
+                <MobilePriceRow
+                  label="WET Clean"
+                  value={row.wet}
+                  recommended={row.recommended === "wet"}
+                  onClick={() =>
+                    setSelected(selected?.item === row.item ? null : row)
+                  }
+                />
+              </div>
+
+              {selected?.item === row.item && (
+                <RecommendationCard
+                  row={row}
+                  onClose={() => setSelected(null)}
+                />
               )}
             </div>
           ))}
         </div>
 
         <div className="relative z-10 mt-10 grid rounded-3xl bg-[#26364d]/95 text-white shadow-2xl backdrop-blur md:grid-cols-4">
-          <Feature icon={<Crown />} title="Premium Care" text="Expert care for every fabric" />
-          <Feature icon={<Settings />} title="Advanced Technology" text="Modern machines, better results" />
-          <Feature icon={<Leaf />} title="Fabric Safe" text="Gentle on fabric, tough on dirt" />
-          <Feature icon={<Clock3 />} title="On-Time Promise" text="Always on time, every time" />
+          <Feature
+            icon={<Crown />}
+            title="Premium Care"
+            text="Expert care for every fabric"
+          />
+          <Feature
+            icon={<Settings />}
+            title="Advanced Technology"
+            text="Modern machines, better results"
+          />
+          <Feature
+            icon={<Leaf />}
+            title="Fabric Safe"
+            text="Gentle on fabric, tough on dirt"
+          />
+          <Feature
+            icon={<Clock3 />}
+            title="On-Time Promise"
+            text="Always on time, every time"
+          />
         </div>
       </div>
     </main>
   );
 }
 
-function HeaderCell({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
+function HeaderCell({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <div className="flex items-center justify-center gap-2 border-l border-white/10 px-4 py-5 text-center font-bold">
       {icon}
@@ -376,7 +430,6 @@ function PriceCell({
       >
         <div className="flex items-center justify-center gap-2">
           <span>{value}</span>
-
           {recommended && (
             <>
               <span className="text-sm">★</span>
@@ -389,7 +442,56 @@ function PriceCell({
   );
 }
 
-function RecommendationCard({ row }: { row: PriceItem }) {
+function MobilePriceRow({
+  label,
+  value,
+  recommended,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  recommended: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-[#ece7e1] bg-[#faf7f3] px-4 py-3">
+      <div>
+        <p className="text-sm font-semibold text-[#26364d]">{label}</p>
+        {recommended && (
+          <p className="mt-1 text-xs font-semibold text-[#b9925d]">
+            ★ Recommended
+          </p>
+        )}
+      </div>
+
+      {value === "-" ? (
+        <span className="text-2xl text-[#b8b1a8]">—</span>
+      ) : (
+        <button
+          type="button"
+          onClick={recommended ? onClick : undefined}
+          className={`rounded-xl border px-4 py-2 font-bold ${
+            recommended
+              ? "border-[#d8b98a] bg-[#f8f1e7] text-[#b9925d]"
+              : "border-transparent text-[#26364d]"
+          }`}
+        >
+          {value}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RecommendationCard({
+  row,
+  onClose,
+  desktop = false,
+}: {
+  row: PriceItem;
+  onClose: () => void;
+  desktop?: boolean;
+}) {
   const leftPosition =
     row.recommended === "normal"
       ? "left-[47%]"
@@ -399,22 +501,32 @@ function RecommendationCard({ row }: { row: PriceItem }) {
 
   return (
     <div
-      className={`absolute ${leftPosition} top-[72px] z-[120] w-[355px] -translate-x-1/2`}
+      className={
+        desktop
+          ? `absolute ${leftPosition} top-[72px] z-[120] w-[355px] -translate-x-1/2`
+          : "mt-5 w-full"
+      }
     >
-      <div className="relative rounded-[26px] bg-[#102845] p-6 text-white shadow-2xl">
-        <div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 bg-[#102845]" />
+      <div className="relative rounded-[26px] bg-[#102845] p-5 text-white shadow-2xl md:p-6">
+        {desktop && (
+          <div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 bg-[#102845]" />
+        )}
 
-        <div className="absolute right-5 top-5 text-white/70">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-5 top-5 text-white/70 transition hover:text-white"
+        >
           <X size={20} />
-        </div>
+        </button>
 
         <div className="flex items-start gap-4">
-          <div className="flex h-20 w-16 items-center justify-center rounded-xl bg-white/10 text-4xl">
+          <div className="flex h-16 w-14 items-center justify-center rounded-xl bg-white/10 text-3xl md:h-20 md:w-16 md:text-4xl">
             👕
           </div>
 
-          <div>
-            <h3 className="text-lg font-bold leading-6">
+          <div className="pr-8">
+            <h3 className="text-base font-bold leading-6 md:text-lg">
               Why {methodLabels[row.recommended]}?
             </h3>
 
@@ -460,15 +572,15 @@ function Feature({
   title,
   text,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   text: string;
 }) {
   return (
-    <div className="flex items-center gap-4 border-white/10 px-8 py-7 md:border-r last:border-r-0">
+    <div className="flex items-center gap-4 border-white/10 px-6 py-6 md:border-r md:px-8 md:py-7 last:border-r-0">
       <div className="text-[#d8b98a]">{icon}</div>
       <div>
-        <h3 className="text-lg font-bold">{title}</h3>
+        <h3 className="text-base font-bold md:text-lg">{title}</h3>
         <p className="mt-1 text-sm text-white/80">{text}</p>
       </div>
     </div>
