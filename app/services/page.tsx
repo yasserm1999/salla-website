@@ -1,163 +1,212 @@
 import {
+  Clock3,
+  Crown,
   Droplets,
+  Home,
+  Leaf,
+  MessageCircle,
+  Scissors,
+  Settings,
   ShieldCheck,
   Shirt,
   Sparkles,
-  Home,
-  Scissors,
-  MessageCircle,
+  WashingMachine,
 } from "lucide-react";
+
+const premiumServices = [
+  {
+    title: "Hydro Dry Clean",
+    icon: ShieldCheck,
+    description:
+      "Premium dry cleaning for dishdashas, suits, bishts, and structured garments.",
+  },
+  {
+    title: "WET Clean",
+    icon: Droplets,
+    description:
+      "Controlled professional wet cleaning for delicate garments, abayas, silk, and premium fabrics.",
+  },
+];
+
+const services = [
+  {
+    title: "Normal Wash",
+    icon: WashingMachine,
+    description:
+      "Reliable everyday washing for regular garments and daily-use fabrics.",
+  },
+  {
+    title: "Dishdasha Care",
+    icon: Shirt,
+    description:
+      "Professional care for dishdashas with proper structure, collar care, and finishing.",
+  },
+  {
+    title: "Abaya Care",
+    icon: Sparkles,
+    description:
+      "Gentle cleaning and finishing for abayas, embroidery, and delicate fabrics.",
+  },
+  {
+    title: "Home Textiles",
+    icon: Home,
+    description:
+      "Cleaning for bedsheets, blankets, curtains, and household fabrics.",
+  },
+  {
+    title: "Stain Treatment",
+    icon: ShieldCheck,
+    description:
+      "Careful stain assessment and treatment while protecting fabric quality.",
+  },
+  {
+    title: "Pressing & Finishing",
+    icon: Scissors,
+    description:
+      "Neat pressing and final finishing so garments return ready to wear.",
+  },
+];
 
 export default function ServicesPage() {
   return (
-    <main>
-      <section className="bg-gradient-to-r from-[#26364d] to-[#546d83] px-6 py-20 text-center text-white">
-        <div className="mx-auto max-w-5xl">
-          <h1 className="mb-4 text-5xl font-bold md:text-6xl">Our Services</h1>
-          <p className="mx-auto max-w-3xl text-lg leading-8 text-white/90">
-            Salla offers advanced garment care through premium cleaning
-            technologies and a complete range of professional fabric care
-            services.
+    <main
+      className="min-h-screen px-4 py-12 md:px-6 md:py-16"
+      style={{
+        backgroundColor: "#c6c1bb",
+        backgroundImage: "url('/pattern.png')",
+        backgroundSize: "760px",
+        backgroundRepeat: "repeat",
+      }}
+    >
+      <div className="mx-auto max-w-7xl">
+        <div className="text-center">
+          <h1 className="text-5xl font-bold text-[#26364d] md:text-6xl">
+            Services
+          </h1>
+
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[#546d83] md:text-lg">
+            Premium garment care using advanced cleaning methods, modern
+            equipment, and careful finishing.
           </p>
         </div>
-      </section>
 
-      <section className="bg-[#c6c1bb] px-6 py-16">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-4 text-center text-4xl font-bold">
-            Premium Cleaning Technologies
-          </h2>
-          <p className="mx-auto mb-10 max-w-3xl text-center text-lg leading-8 text-[#3f4f61]">
-            Our premium services are built around two advanced cleaning methods
-            that set Salla apart from the usual market players.
-          </p>
+        <section className="mt-10 grid gap-6 md:grid-cols-2">
+          {premiumServices.map((service) => {
+            const Icon = service.icon;
 
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="rounded-3xl bg-white p-8 shadow-sm">
-              <ShieldCheck className="mb-5 text-[#546d83]" size={46} />
-              <h3 className="mb-4 text-3xl font-bold">
-                Hydrocarbon Dry Cleaning
-              </h3>
-              <p className="mb-4 leading-8 text-[#3f4f61]">
-                Hydrocarbon Dry Cleaning is one of Salla’s premium services. It
-                is a professional solvent-based cleaning method designed for
-                garments that need more refined care.
-              </p>
-              <p className="mb-4 leading-8 text-[#3f4f61]">
-                Compared with the commonly used PERC process in the market,
-                hydrocarbon cleaning is gentler on fabrics and is a better
-                option for health and environmental consideration.
-              </p>
-              <p className="leading-8 text-[#3f4f61]">
-                It is ideal for structured garments, luxury pieces, and fabrics
-                that need excellent cleaning while preserving texture, feel, and
-                finish.
-              </p>
-            </div>
+            return (
+              <article
+                key={service.title}
+                className="rounded-[30px] bg-[#26364d]/95 p-7 text-white shadow-2xl backdrop-blur md:p-8"
+              >
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-[#d8b98a]">
+                  <Icon size={34} />
+                </div>
 
-            <div className="rounded-3xl bg-white p-8 shadow-sm">
-              <Droplets className="mb-5 text-[#546d83]" size={46} />
-              <h3 className="mb-4 text-3xl font-bold">
-                Professional Wet Cleaning
-              </h3>
-              <p className="mb-4 leading-8 text-[#3f4f61]">
-                Professional Wet Cleaning is also one of Salla’s premium
-                services. It is not normal washing. It is a controlled cleaning
-                process that uses water, specialized detergents, and precise
-                machine programs.
-              </p>
-              <p className="mb-4 leading-8 text-[#3f4f61]">
-                At Salla, this service is enhanced through advanced Girbau and
-                GWET washer technology for delicate and premium garments.
-              </p>
-              <p className="leading-8 text-[#3f4f61]">
-                It is ideal for garments that need careful handling,
-                fabric-sensitive treatment, and high-quality finishing.
-              </p>
-            </div>
+                <h2 className="text-3xl font-bold">{service.title}</h2>
+
+                <p className="mt-4 text-base leading-8 text-white/80">
+                  {service.description}
+                </p>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="mt-10 rounded-[30px] bg-white/90 p-5 shadow-2xl backdrop-blur md:p-8">
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-[#26364d] md:text-4xl">
+              Complete Garment Care
+            </h2>
+
+            <p className="mt-3 max-w-2xl text-base leading-7 text-[#546d83] md:text-lg">
+              A full range of services for daily wear, traditional garments,
+              delicate pieces, and household fabrics.
+            </p>
           </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {services.map((service) => {
+              const Icon = service.icon;
+
+              return (
+                <article
+                  key={service.title}
+                  className="rounded-3xl border border-[#ece7e1] bg-white p-6 shadow-sm"
+                >
+                  <div className="mb-5 flex h-13 w-13 items-center justify-center rounded-2xl bg-[#f8f1e7] text-[#b9925d]">
+                    <Icon size={27} />
+                  </div>
+
+                  <h3 className="text-xl font-bold text-[#26364d]">
+                    {service.title}
+                  </h3>
+
+                  <p className="mt-3 leading-7 text-[#546d83]">
+                    {service.description}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-10 grid rounded-3xl bg-[#26364d]/95 text-white shadow-2xl backdrop-blur md:grid-cols-4">
+          <Feature
+            icon={<Crown />}
+            title="Premium Care"
+            text="Expert care for every fabric"
+          />
+          <Feature
+            icon={<Settings />}
+            title="Advanced Technology"
+            text="Modern machines, better results"
+          />
+          <Feature
+            icon={<Leaf />}
+            title="Fabric Safe"
+            text="Gentle on fabric, tough on dirt"
+          />
+          <Feature
+            icon={<Clock3 />}
+            title="On-Time Promise"
+            text="Always on time, every time"
+          />
+        </section>
+
+        <div className="mt-10 text-center">
+          <a
+            href="https://wa.me/96895449977"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#26364d] px-7 py-4 font-semibold text-white shadow-lg transition hover:scale-105"
+          >
+            <MessageCircle size={20} />
+            Contact on WhatsApp
+          </a>
         </div>
-      </section>
-
-      <section className="bg-[#9cb2bf] px-6 py-16">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-4 text-center text-4xl font-bold">
-            Complete Garment Care Services
-          </h2>
-          <p className="mx-auto mb-10 max-w-3xl text-center text-lg leading-8 text-[#26364d]">
-            In addition to our premium cleaning technologies, Salla provides a
-            full range of garment care services for everyday wear, traditional
-            garments, delicate items, and household fabrics.
-          </p>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Shirt className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Normal Wash</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Everyday washing service for regular garments that need reliable
-                cleaning and fresh finishing.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Sparkles className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Dishdasha Care</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Professional care for dishdashas with proper treatment,
-                finishing, and presentation.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Sparkles className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Abaya Care</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Gentle and professional cleaning for abayas and delicate
-                traditional garments.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Home className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Home Textiles</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Cleaning solutions for blankets, bedding, curtains, and other
-                household fabric items.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Sparkles className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Stain Treatment</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Careful stain assessment and treatment to improve garment
-                appearance while protecting fabric condition.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <Scissors className="mb-4 text-[#546d83]" size={38} />
-              <h3 className="mb-2 text-xl font-bold">Pressing & Finishing</h3>
-              <p className="leading-7 text-[#3f4f61]">
-                Final presentation and pressing to ensure garments return neat,
-                polished, and ready to wear.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-10 text-center">
-            <a
-              href="https://wa.me/96895449977"
-              target="_blank"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#26364d] px-6 py-3 font-semibold text-white transition hover:scale-105"
-            >
-              <MessageCircle size={20} />
-              Contact on WhatsApp
-            </a>
-          </div>
-        </div>
-      </section>
+      </div>
     </main>
+  );
+}
+
+function Feature({
+  icon,
+  title,
+  text,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="flex items-center gap-4 border-white/10 px-6 py-6 md:border-r md:px-8 md:py-7 last:border-r-0">
+      <div className="text-[#d8b98a]">{icon}</div>
+
+      <div>
+        <h3 className="text-base font-bold md:text-lg">{title}</h3>
+        <p className="mt-1 text-sm text-white/80">{text}</p>
+      </div>
+    </div>
   );
 }
