@@ -63,7 +63,7 @@ export default function Home() {
 
               <Link
   href="/loyalty"
-  className="inline-flex items-center gap-3 rounded-2xl border border-[#d8b98a]/40 bg-[#d8b98a]/10 px-7 py-4 font-semibold text-white transition hover:bg-[#d8b98a]/15"
+ className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d8b98a]/40 bg-[#d8b98a]/10 px-6 py-4 font-semibold text-white transition hover:bg-[#d8b98a]/15"
 >
   <Gift className="text-[#d8b98a]" size={18} />
   Loyalty
