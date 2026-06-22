@@ -15,7 +15,7 @@ export default function HomeArabic() {
       <section className="relative overflow-hidden bg-[#26364d] text-white">
         <img
           src="/hero-counter.png"
-          alt="عناية صلّة المتميزة بالملابس"
+          alt="عناية سلَّة المتميزة بالملابس"
           className="absolute inset-0 h-full w-full object-cover brightness-110 contrast-110"
         />
 
@@ -25,7 +25,7 @@ export default function HomeArabic() {
           <div className="max-w-2xl">
             <img
               src="/logoa.png"
-              alt="شعار صلّة"
+              alt="شعار سلَّة"
               className="mb-2 h-40 w-auto object-contain md:h-56"
             />
 
@@ -40,7 +40,7 @@ export default function HomeArabic() {
             </h1>
 
             <p className="mt-5 max-w-xl text-base leading-8 text-white/90 md:text-lg md:leading-9">
-              تقدّم صلّة عناية متميّزة بالملابس من خلال تقنيات متطوّرة وعمليات
+              تقدّم سلَّة عناية متميّزة بالملابس من خلال تقنيات متطوّرة وعمليات
               موثوقة وفريق عمل ماهر.
             </p>
 
@@ -56,14 +56,14 @@ export default function HomeArabic() {
               </a>
 
               <Link
-                href="/tracker"
+                href="/ar/tracker"
                 className="inline-flex justify-center rounded-2xl border border-white/30 bg-white/10 px-6 py-4 font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
               >
                 تتبّع الطلب
               </Link>
 
               <Link
-                href="/loyalty"
+                href="/ar/loyalty"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d8b98a]/40 bg-[#d8b98a]/10 px-6 py-4 font-semibold text-white transition hover:bg-[#d8b98a]/15"
               >
                 <Gift className="text-[#d8b98a]" size={18} />
@@ -116,7 +116,7 @@ export default function HomeArabic() {
       <section className="bg-gradient-to-bl from-[#e8f0f4] to-[#c7d7df] px-5 py-16 md:px-6 md:py-20">
         <div className="mx-auto max-w-5xl text-center">
           <h2 className="mb-4 text-4xl font-bold md:text-5xl">
-            <span className="text-[#26364d]">ما الذي يجعل صلّة</span>{" "}
+            <span className="text-[#26364d]">ما الذي يجعل سلَّة</span>{" "}
             <span className="text-[#546d83]">مختلفة؟</span>
           </h2>
 
@@ -152,14 +152,14 @@ export default function HomeArabic() {
 
           <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap md:gap-4">
             <Link
-              href="/services"
+              href="/ar/services"
               className="rounded-2xl bg-[#26364d] px-8 py-4 font-semibold text-white shadow-lg transition hover:scale-105"
             >
               عرض الخدمات
             </Link>
 
             <Link
-              href="/prices"
+              href="/ar/prices"
               className="rounded-2xl border border-[#26364d] bg-white px-8 py-4 font-semibold text-[#26364d] transition hover:scale-105"
             >
               عرض الأسعار

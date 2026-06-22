@@ -6,25 +6,33 @@ import { useState } from "react";
 import { Globe, Menu, X } from "lucide-react";
 
 const navLinks = [
-  { href: "/", label: "About Us" },
-  { href: "/services", label: "Services" },
-  { href: "/prices", label: "Prices" },
-  { href: "/calculator", label: "Calculator" },
-  { href: "/loyalty", label: "Loyalty" },
-  { href: "/team", label: "Our Team" },
-  { href: "/tracker", label: "Track Order" },
-  { href: "/contact", label: "Contact Us" },
+  { href: "/", arHref: "/ar", label: "About Us", labelAr: "من نحن" },
+  { href: "/services", arHref: "/ar/services", label: "Services", labelAr: "الخدمات" },
+  { href: "/prices", arHref: "/ar/prices", label: "Prices", labelAr: "الأسعار" },
+  { href: "/calculator", arHref: "/ar/calculator", label: "Calculator", labelAr: "حاسبة الأسعار" },
+  { href: "/loyalty", arHref: "/ar/loyalty", label: "Loyalty", labelAr: "الولاء" },
+  { href: "/team", arHref: "/ar/team", label: "Our Team", labelAr: "فريقنا" },
+  { href: "/tracker", arHref: "/ar/tracker", label: "Track Order", labelAr: "تتبّع الطلب" },
+  { href: "/contact", arHref: "/ar/contact", label: "Contact Us", labelAr: "تواصل معنا" },
 ];
 
 export default function Header() {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  const isArabic = pathname?.startsWith("/ar") ?? false;
+  const pathname = usePathname() ?? "/";
+  const isArabic = pathname.startsWith("/ar");
 
-  // Language toggle: AR on the English site, EN when viewing the Arabic page.
+  // Map the current page to its counterpart in the other language.
+  const toEnglish = (p: string) => {
+    const stripped = p.replace(/^\/ar/, "");
+    return stripped === "" ? "/" : stripped;
+  };
+  const toArabic = (p: string) => (p === "/" ? "/ar" : `/ar${p}`);
+  const toggleHref = isArabic ? toEnglish(pathname) : toArabic(pathname);
+
+  // Language toggle: AR on the English site, EN when viewing an Arabic page.
   const langToggle = (
     <Link
-      href={isArabic ? "/" : "/ar"}
+      href={toggleHref}
       onClick={() => setOpen(false)}
       aria-label={isArabic ? "Switch to English" : "التبديل إلى العربية"}
       className="inline-flex items-center gap-1.5 rounded-full border border-[#d8b98a]/50 bg-[#d8b98a]/10 px-3.5 py-1.5 text-sm font-semibold text-[#d8b98a] transition hover:bg-[#d8b98a]/20"
@@ -35,7 +43,10 @@ export default function Header() {
   );
 
   return (
-    <header className="sticky top-0 z-50 bg-[#26364d] text-white shadow-md">
+    <header
+      dir={isArabic ? "rtl" : "ltr"}
+      className="sticky top-0 z-50 bg-[#26364d] text-white shadow-md"
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
         {/* Logo */}
         <Link href="/" className="flex items-center">
@@ -52,10 +63,10 @@ export default function Header() {
             {navLinks.map((link) => (
               <Link
                 key={link.href}
-                href={link.href}
+                href={isArabic ? link.arHref : link.href}
                 className="transition hover:text-[#9cb2bf]"
               >
-                {link.label}
+                {isArabic ? link.labelAr : link.label}
               </Link>
             ))}
           </nav>
@@ -83,11 +94,11 @@ export default function Header() {
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={isArabic ? link.arHref : link.href}
                     onClick={() => setOpen(false)}
                     className="block border-b border-[#eef2f4] px-5 py-4 text-sm font-semibold transition hover:bg-[#c6c1bb]/30"
                   >
-                    {link.label}
+                    {isArabic ? link.labelAr : link.label}
                   </Link>
                 ))}
               </div>
