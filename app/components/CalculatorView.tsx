@@ -12,6 +12,8 @@ import {
   type Method,
 } from "../data/pricing";
 
+const METHODS: Method[] = ["normal", "dry", "wet", "press"];
+
 const UI = {
   en: {
     title: "Price Calculator",
@@ -21,7 +23,13 @@ const UI = {
     normalWash: "Normal Wash",
     hydroDry: "Hydro Dry Clean",
     wetClean: "WET Clean",
-    mobile: { normal: ["Normal", "Wash"], dry: ["Hydro", "Dry"], wet: ["WET", "Clean"] },
+    pressing: "Pressing",
+    mobile: {
+      normal: ["Normal", "Wash"],
+      dry: ["Hydro", "Dry"],
+      wet: ["WET", "Clean"],
+      press: ["Press", "Iron"],
+    },
     estimatedTotal: "Estimated Total",
     reset: "Reset",
     currency: "OMR",
@@ -34,14 +42,21 @@ const UI = {
     normalWash: "الغسيل العادي",
     hydroDry: "التنظيف الجاف بالهيدروكربون",
     wetClean: "التنظيف الرطب الاحترافي",
-    mobile: { normal: ["غسيل", "عادي"], dry: ["هيدرو", "جاف"], wet: ["تنظيف", "رطب"] },
+    pressing: "الكي",
+    mobile: {
+      normal: ["غسيل", "عادي"],
+      dry: ["هيدرو", "جاف"],
+      wet: ["تنظيف", "رطب"],
+      press: ["كي", "فقط"],
+    },
     estimatedTotal: "الإجمالي التقديري",
     reset: "إعادة تعيين",
     currency: "ر.ع.",
   },
 } as const;
 
-type Quantities = Record<string, { normal: number; dry: number; wet: number }>;
+type Qty = { normal: number; dry: number; wet: number; press: number };
+type Quantities = Record<string, Qty>;
 
 export default function CalculatorView({ locale }: { locale: Locale }) {
   const isAr = locale === "ar";
@@ -59,6 +74,7 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
         normal: prev[key]?.normal || 0,
         dry: prev[key]?.dry || 0,
         wet: prev[key]?.wet || 0,
+        press: prev[key]?.press || 0,
         [service]: value,
       },
     }));
@@ -66,12 +82,13 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
 
   const total = useMemo(() => {
     return GARMENTS.reduce((sum, g) => {
-      const q = quantities[g.en] || { normal: 0, dry: 0, wet: 0 };
+      const q = quantities[g.en] || { normal: 0, dry: 0, wet: 0, press: 0 };
       return (
         sum +
         (g.normal ? q.normal * g.normal : 0) +
         (g.dry ? q.dry * g.dry : 0) +
-        (g.wet ? q.wet * g.wet : 0)
+        (g.wet ? q.wet * g.wet : 0) +
+        (g.press ? q.press * g.press : 0)
       );
     }, 0);
   }, [quantities]);
@@ -121,26 +138,27 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
 
         {/* DESKTOP TABLE */}
         <div className="mt-10 hidden overflow-hidden rounded-[30px] bg-white/90 shadow-2xl backdrop-blur md:block">
-          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] bg-[#26364d] text-white">
-            <div className="flex items-center gap-3 px-8 py-5 font-bold">
+          <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] bg-[#26364d] text-white">
+            <div className="flex items-center gap-3 px-6 py-5 font-bold">
               <Shirt size={19} />
               {t.item}
             </div>
             <HeaderCell icon={<Droplets size={18} />} label={t.normalWash} />
             <HeaderCell icon={<Shirt size={18} />} label={t.hydroDry} />
             <HeaderCell icon={<Sparkles size={18} />} label={t.wetClean} />
+            <HeaderCell icon={<Shirt size={18} />} label={t.pressing} />
           </div>
 
           {visibleItems.map((g) => (
             <div
               key={g.en}
-              className="grid grid-cols-[1.2fr_1fr_1fr_1fr] border-b border-[#ece7e1] last:border-b-0"
+              className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] border-b border-[#ece7e1] last:border-b-0"
             >
-              <div className="flex items-center px-8 py-6 text-lg font-bold text-[#26364d]">
+              <div className="flex items-center px-6 py-6 text-lg font-bold text-[#26364d]">
                 {garmentName(g, locale)}
               </div>
 
-              {(["normal", "dry", "wet"] as Method[]).map((m) => (
+              {METHODS.map((m) => (
                 <ServiceInput
                   key={m}
                   price={g[m]}
@@ -154,23 +172,24 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
 
         {/* MOBILE TABLE */}
         <div className="mt-8 overflow-hidden rounded-[24px] bg-white/90 shadow-xl backdrop-blur md:hidden">
-          <div className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] bg-[#26364d] text-white">
-            <div className="px-3 py-4 text-sm font-bold">{t.item}</div>
+          <div className="grid grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr_0.9fr] bg-[#26364d] text-white">
+            <div className="px-2 py-4 text-sm font-bold">{t.item}</div>
             <MobileHeader lines={t.mobile.normal} />
             <MobileHeader lines={t.mobile.dry} />
             <MobileHeader lines={t.mobile.wet} />
+            <MobileHeader lines={t.mobile.press} />
           </div>
 
           {visibleItems.map((g) => (
             <div
               key={g.en}
-              className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] border-b border-[#ece7e1] last:border-b-0"
+              className="grid grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr_0.9fr] border-b border-[#ece7e1] last:border-b-0"
             >
-              <div className="px-3 py-4 text-sm font-bold leading-5 text-[#26364d]">
+              <div className="px-2 py-4 text-xs font-bold leading-4 text-[#26364d]">
                 {garmentName(g, locale)}
               </div>
 
-              {(["normal", "dry", "wet"] as Method[]).map((m) => (
+              {METHODS.map((m) => (
                 <MobileServiceInput
                   key={m}
                   price={g[m]}
@@ -208,7 +227,7 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
 
 function HeaderCell({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 border-l border-white/10 px-4 py-5 text-center font-bold">
+    <div className="flex items-center justify-center gap-2 border-l border-white/10 px-3 py-5 text-center text-sm font-bold">
       {icon}
       {label}
     </div>
@@ -217,7 +236,7 @@ function HeaderCell({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 function MobileHeader({ lines }: { lines: readonly string[] }) {
   return (
-    <div className="px-2 py-4 text-center text-xs font-bold leading-4">
+    <div className="px-1 py-4 text-center text-[11px] font-bold leading-4">
       {lines[0]}
       <br />
       {lines[1]}
@@ -253,7 +272,7 @@ function ServiceInput({
         value={value || ""}
         onChange={(e) => onChange(Number(e.target.value))}
         placeholder="0"
-        className="w-24 rounded-xl border border-[#d8cbbd] bg-[#f8f1e7] px-3 py-2 text-center font-bold text-[#26364d] outline-none transition focus:border-[#26364d] focus:bg-white"
+        className="w-20 rounded-xl border border-[#d8cbbd] bg-[#f8f1e7] px-2 py-2 text-center font-bold text-[#26364d] outline-none transition focus:border-[#26364d] focus:bg-white"
       />
     </div>
   );
@@ -277,8 +296,8 @@ function MobileServiceInput({
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-1 border-l border-[#ece7e1] px-1 py-3">
-      <span className="text-[11px] font-semibold text-[#b9925d]">
+    <div className="flex flex-col items-center justify-center gap-1 border-l border-[#ece7e1] px-0.5 py-3">
+      <span className="text-[10px] font-semibold text-[#b9925d]">
         {price.toFixed(3)}
       </span>
       <input
@@ -287,7 +306,7 @@ function MobileServiceInput({
         value={value || ""}
         onChange={(e) => onChange(Number(e.target.value))}
         placeholder="0"
-        className="w-14 rounded-lg border border-[#d8cbbd] bg-[#f8f1e7] px-1 py-2 text-center text-sm font-bold text-[#26364d] outline-none focus:border-[#26364d]"
+        className="w-11 rounded-lg border border-[#d8cbbd] bg-[#f8f1e7] px-0.5 py-1.5 text-center text-xs font-bold text-[#26364d] outline-none focus:border-[#26364d]"
       />
     </div>
   );

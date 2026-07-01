@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Clock3, Crown, Droplets, Leaf, Settings, Shirt, X } from "lucide-react";
+import { Clock3, Crown, Droplets, Leaf, Settings, Shirt, Sparkles, X } from "lucide-react";
 import {
   CATEGORIES,
   GARMENTS,
@@ -17,6 +17,8 @@ import {
   type Method,
 } from "../data/pricing";
 
+const METHODS: Method[] = ["normal", "dry", "wet", "press"];
+
 const UI = {
   en: {
     title: "Prices",
@@ -26,7 +28,13 @@ const UI = {
     normalWash: "Normal Wash",
     hydroDry: "Hydro Dry Clean",
     wetClean: "WET Clean",
-    mobile: { normal: ["Normal", "Wash"], dry: ["Hydro", "Dry"], wet: ["WET", "Clean"] },
+    pressing: "Pressing",
+    mobile: {
+      normal: ["Normal", "Wash"],
+      dry: ["Hydro", "Dry"],
+      wet: ["WET", "Clean"],
+      press: ["Press", "Iron"],
+    },
     recommended: "Recommended",
     why: "Why",
     recommendedFor: "Recommended for",
@@ -48,7 +56,13 @@ const UI = {
     normalWash: "الغسيل العادي",
     hydroDry: "التنظيف الجاف بالهيدروكربون",
     wetClean: "التنظيف الرطب الاحترافي",
-    mobile: { normal: ["غسيل", "عادي"], dry: ["هيدرو", "جاف"], wet: ["تنظيف", "رطب"] },
+    pressing: "الكي",
+    mobile: {
+      normal: ["غسيل", "عادي"],
+      dry: ["هيدرو", "جاف"],
+      wet: ["تنظيف", "رطب"],
+      press: ["كي", "فقط"],
+    },
     recommended: "موصى به",
     why: "لماذا",
     recommendedFor: "موصى به لـ",
@@ -116,26 +130,27 @@ export default function PricesView({ locale }: { locale: Locale }) {
 
         {/* DESKTOP TABLE */}
         <div className="relative z-20 mt-10 hidden overflow-visible rounded-[30px] bg-white/90 shadow-2xl backdrop-blur md:block">
-          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] overflow-hidden rounded-t-[30px] bg-[#26364d] text-white">
-            <div className="flex items-center gap-3 px-8 py-5 font-bold">
+          <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] overflow-hidden rounded-t-[30px] bg-[#26364d] text-white">
+            <div className="flex items-center gap-3 px-6 py-5 font-bold">
               <Shirt size={19} />
               {t.item}
             </div>
             <HeaderCell icon={<Droplets size={18} />} label={t.normalWash} />
             <HeaderCell icon={<Shirt size={18} />} label={t.hydroDry} />
             <HeaderCell icon={<Droplets size={18} />} label={t.wetClean} />
+            <HeaderCell icon={<Sparkles size={18} />} label={t.pressing} />
           </div>
 
           {rows.map((row) => (
             <div
               key={row.en}
-              className="relative grid grid-cols-[1.2fr_1fr_1fr_1fr] border-b border-[#ece7e1] last:border-b-0"
+              className="relative grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] border-b border-[#ece7e1] last:border-b-0"
             >
-              <div className="flex items-center px-8 py-6 text-lg font-bold text-[#26364d]">
+              <div className="flex items-center px-6 py-6 text-lg font-bold text-[#26364d]">
                 {garmentName(row, locale)}
               </div>
 
-              {(["normal", "dry", "wet"] as Method[]).map((m) => (
+              {METHODS.map((m) => (
                 <PriceCell
                   key={m}
                   value={priceLabel(row[m])}
@@ -161,23 +176,24 @@ export default function PricesView({ locale }: { locale: Locale }) {
 
         {/* MOBILE COMPACT TABLE */}
         <div className="relative z-20 mt-8 overflow-hidden rounded-[24px] bg-white/90 shadow-xl backdrop-blur md:hidden">
-          <div className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] rounded-t-[24px] bg-[#26364d] text-white">
-            <div className="px-3 py-4 text-sm font-bold">{t.item}</div>
+          <div className="grid grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr_0.9fr] rounded-t-[24px] bg-[#26364d] text-white">
+            <div className="px-2 py-4 text-sm font-bold">{t.item}</div>
             <MobileHeader lines={t.mobile.normal} />
             <MobileHeader lines={t.mobile.dry} />
             <MobileHeader lines={t.mobile.wet} />
+            <MobileHeader lines={t.mobile.press} />
           </div>
 
           {rows.map((row) => (
             <div
               key={row.en}
-              className="grid grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr] border-b border-[#ece7e1] last:border-b-0"
+              className="grid grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr_0.9fr] border-b border-[#ece7e1] last:border-b-0"
             >
-              <div className="px-3 py-4 text-sm font-bold leading-5 text-[#26364d]">
+              <div className="px-2 py-4 text-xs font-bold leading-4 text-[#26364d]">
                 {garmentName(row, locale)}
               </div>
 
-              {(["normal", "dry", "wet"] as Method[]).map((m) => (
+              {METHODS.map((m) => (
                 <MobileTableCell
                   key={m}
                   value={priceLabel(row[m])}
@@ -214,7 +230,7 @@ export default function PricesView({ locale }: { locale: Locale }) {
 
 function HeaderCell({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 border-l border-white/10 px-4 py-5 text-center font-bold">
+    <div className="flex items-center justify-center gap-2 border-l border-white/10 px-3 py-5 text-center text-sm font-bold">
       {icon}
       {label}
     </div>
@@ -223,7 +239,7 @@ function HeaderCell({ icon, label }: { icon: ReactNode; label: string }) {
 
 function MobileHeader({ lines }: { lines: readonly string[] }) {
   return (
-    <div className="px-2 py-4 text-center text-xs font-bold leading-4">
+    <div className="px-1 py-4 text-center text-[11px] font-bold leading-4">
       {lines[0]}
       <br />
       {lines[1]}
@@ -255,19 +271,19 @@ function PriceCell({
       <button
         type="button"
         onClick={recommended ? onClick : undefined}
-        className={`min-w-[165px] rounded-xl border px-5 py-3 text-base font-bold transition ${
+        className={`rounded-xl border px-3 py-3 text-base font-bold transition ${
           recommended
             ? "border-[#d8b98a] bg-[#f8f1e7] text-[#b9925d] shadow-sm hover:scale-105"
             : "border-transparent text-[#26364d]"
         }`}
       >
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-col items-center justify-center gap-1">
           <span>{value}</span>
           {recommended && (
-            <>
-              <span className="text-sm">★</span>
-              <span className="text-xs font-medium">{label}</span>
-            </>
+            <span className="flex items-center gap-1 text-[10px] font-medium">
+              <span>★</span>
+              {label}
+            </span>
           )}
         </div>
       </button>
@@ -286,7 +302,7 @@ function MobileTableCell({
 }) {
   if (value === "-") {
     return (
-      <div className="flex items-center justify-center border-l border-[#ece7e1] py-4 text-lg text-[#b8b1a8]">
+      <div className="flex items-center justify-center border-l border-[#ece7e1] py-4 text-base text-[#b8b1a8]">
         —
       </div>
     );
@@ -297,14 +313,14 @@ function MobileTableCell({
       <button
         type="button"
         onClick={recommended ? onClick : undefined}
-        className={`rounded-xl border px-2 py-2 text-sm font-bold ${
+        className={`rounded-lg border px-1 py-2 text-xs font-bold ${
           recommended
             ? "border-[#d8b98a] bg-[#f8f1e7] text-[#b9925d]"
             : "border-transparent text-[#26364d]"
         }`}
       >
         {value}
-        {recommended && <span className="ml-1">★</span>}
+        {recommended && <span className="ml-0.5">★</span>}
       </button>
     </div>
   );
@@ -326,20 +342,20 @@ function RecommendationCard({
   const copy = RECO[locale][row.recommended];
   const side = isAr ? "right" : "left";
 
-  // Anchor the desktop popover under the recommended column.
+  // Anchor the desktop popover under the recommended column (5-column grid).
   const offset =
     row.recommended === "normal"
-      ? "47%"
+      ? "35%"
       : row.recommended === "dry"
-      ? "70%"
-      : "90%";
+      ? "54%"
+      : "72%";
 
   return (
     <div
       dir={isAr ? "rtl" : "ltr"}
       className={
         desktop
-          ? "absolute top-[72px] z-[120] w-[355px] -translate-x-1/2"
+          ? "absolute top-[80px] z-[120] w-[355px] -translate-x-1/2"
           : "fixed left-1/2 top-[38%] z-[999] w-[88vw] max-w-[360px] -translate-x-1/2"
       }
       style={desktop ? { [side]: offset } : undefined}
