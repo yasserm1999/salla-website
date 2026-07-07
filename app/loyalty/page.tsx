@@ -1,46 +1,10 @@
-"use client";
-
-import { useState } from "react";
-import { Gift, Search, Sparkles, Wallet } from "lucide-react";
+import Link from "next/link";
+import { Gift, Clock3, MessageCircle } from "lucide-react";
 
 export default function LoyaltyPage() {
-  const [customerID, setCustomerID] = useState("");
-  const [data, setData] = useState<any>(null);
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const checkPoints = async () => {
-    setLoading(true);
-    setMessage("");
-    setData(null);
-
-    const res = await fetch("/api/loyalty", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ customerID }),
-    });
-
-    const result = await res.json();
-
-    setLoading(false);
-
-    if (!result.success) {
-      setMessage(result.message || "Could not find loyalty details");
-      return;
-    }
-
-    setData(result);
-  };
-
-  const pointsAvailable = Number(data?.pointsAvailable || 0);
-  const pointsUsed = Number(data?.pointsUsed || 0);
-  const creditAvailable = Number(data?.creditAvailable || 0);
-
   return (
     <main
-      className="min-h-screen px-4 py-16 md:px-6 md:py-20"
+      className="flex min-h-screen items-center justify-center px-4 py-16 md:px-6"
       style={{
         backgroundColor: "#c6c1bb",
         backgroundImage: "url('/pattern.png')",
@@ -48,89 +12,43 @@ export default function LoyaltyPage() {
         backgroundRepeat: "repeat",
       }}
     >
-      <div className="mx-auto max-w-5xl rounded-[34px] bg-white/90 p-6 text-center shadow-2xl backdrop-blur md:p-12">
-        <Gift className="mx-auto text-[#d8b98a]" size={52} />
+      <div className="mx-auto max-w-xl rounded-[34px] bg-white/90 p-8 text-center shadow-2xl backdrop-blur md:p-12">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#26364d] text-[#d8b98a] shadow-xl">
+          <Gift size={40} />
+        </div>
 
-        <h1 className="mt-5 text-4xl font-bold text-[#26364d] md:text-6xl">
+        <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#d8b98a]/20 px-4 py-1.5 text-sm font-semibold uppercase tracking-[0.2em] text-[#b9925d]">
+          <Clock3 size={16} />
+          Coming Soon
+        </span>
+
+        <h1 className="mt-5 text-4xl font-bold text-[#26364d] md:text-5xl">
           Salla Loyalty
         </h1>
 
-        <p className="mx-auto mt-4 max-w-2xl text-[#546d83] md:text-lg">
-          Enter your customer ID to view your loyalty points and available
-          credit.
+        <p className="mx-auto mt-4 max-w-md text-base leading-8 text-[#546d83] md:text-lg">
+          Our loyalty rewards program is on its way. Soon you&apos;ll earn points
+          on every order and redeem them for credit. Stay tuned!
         </p>
 
-        <div className="mt-8 flex flex-col gap-3 md:flex-row">
-          <input
-            value={customerID}
-            onChange={(e) => setCustomerID(e.target.value)}
-            placeholder="Enter customer ID"
-            className="flex-1 rounded-2xl border border-[#d8e1e7] px-5 py-4 text-[#26364d] outline-none focus:border-[#26364d]"
-          />
-
-          <button
-            onClick={checkPoints}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#26364d] px-7 py-4 font-semibold text-white transition hover:scale-105"
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+          <a
+            href="https://wa.me/96895449977"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#26364d] px-7 py-4 font-semibold text-white shadow-lg transition hover:scale-105"
           >
-            <Search size={20} />
-            {loading ? "Checking..." : "Check"}
-          </button>
+            <MessageCircle size={20} />
+            Contact on WhatsApp
+          </a>
+
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-2xl border border-[#26364d] bg-white px-7 py-4 font-semibold text-[#26364d] transition hover:scale-105"
+          >
+            Back to Home
+          </Link>
         </div>
-
-        {data && (
-          <div className="mt-10 rounded-[30px] bg-[#26364d] p-6 text-white shadow-xl md:p-8">
-            <Sparkles className="mx-auto text-[#d8b98a]" size={42} />
-
-            <p className="mt-4 text-sm uppercase tracking-[0.25em] text-[#d8b98a]">
-              Available Points
-            </p>
-
-            <h2 className="mt-3 text-6xl font-bold">{pointsAvailable}</h2>
-
-            <p className="mt-3 text-lg text-white/75">
-              Approx. points value: OMR {(pointsAvailable * 0.05).toFixed(2)}
-            </p>
-
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl bg-white/10 p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#d8b98a]">
-                  Used Points
-                </p>
-                <p className="mt-2 text-3xl font-bold">{pointsUsed}</p>
-              </div>
-
-              <div className="rounded-2xl bg-white/10 p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#d8b98a]">
-                  Used Value
-                </p>
-                <p className="mt-2 text-3xl font-bold">
-                  OMR {(pointsUsed * 0.05).toFixed(2)}
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-[#d8b98a] p-5 text-[#26364d]">
-                <Wallet className="mx-auto" size={28} />
-                <p className="mt-2 text-xs uppercase tracking-[0.2em]">
-                  Credit Available
-                </p>
-                <p className="mt-2 text-3xl font-bold">
-                  OMR {creditAvailable.toFixed(2)}
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-8 text-white/75">
-              Thank you for choosing Salla.
-            </p>
-          </div>
-        )}
-
-        {message && (
-          <div className="mt-8 rounded-2xl bg-red-50 px-5 py-4 font-semibold text-red-600">
-            {message}
-          </div>
-        )}
       </div>
     </main>
   );

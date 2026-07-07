@@ -5,13 +5,23 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Globe, Menu, X } from "lucide-react";
 
-const navLinks = [
+type NavLink = {
+  href: string;
+  arHref: string;
+  label: string;
+  labelAr: string;
+  hidden?: boolean;
+};
+
+const navLinks: NavLink[] = [
   { href: "/", arHref: "/ar", label: "About Us", labelAr: "من نحن" },
   { href: "/services", arHref: "/ar/services", label: "Services", labelAr: "الخدمات" },
   { href: "/prices", arHref: "/ar/prices", label: "Prices", labelAr: "الأسعار" },
   { href: "/calculator", arHref: "/ar/calculator", label: "Calculator", labelAr: "حاسبة الأسعار" },
   { href: "/loyalty", arHref: "/ar/loyalty", label: "Loyalty", labelAr: "الولاء" },
-  { href: "/team", arHref: "/ar/team", label: "Our Team", labelAr: "فريقنا" },
+  // Hidden from the nav until team photos are updated. Page code is kept — set
+  // hidden: false to show it again.
+  { href: "/team", arHref: "/ar/team", label: "Our Team", labelAr: "فريقنا", hidden: true },
   { href: "/tracker", arHref: "/ar/tracker", label: "Track Order", labelAr: "تتبّع الطلب" },
   { href: "/contact", arHref: "/ar/contact", label: "Contact Us", labelAr: "تواصل معنا" },
 ];
@@ -20,6 +30,7 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname() ?? "/";
   const isArabic = pathname.startsWith("/ar");
+  const visibleLinks = navLinks.filter((link) => !link.hidden);
 
   // Map the current page to its counterpart in the other language.
   const toEnglish = (p: string) => {
@@ -60,7 +71,7 @@ export default function Header() {
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-6 md:flex">
           <nav className="flex gap-6 text-sm font-medium md:text-base">
-            {navLinks.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={isArabic ? link.arHref : link.href}
@@ -90,8 +101,12 @@ export default function Header() {
 
             {/* Mobile Dropdown */}
             {open && (
-              <div className="absolute right-0 mt-3 w-64 overflow-hidden rounded-2xl bg-white text-[#26364d] shadow-2xl">
-                {navLinks.map((link) => (
+              <div
+                className={`absolute ${
+                  isArabic ? "left-0" : "right-0"
+                } mt-3 w-64 overflow-hidden rounded-2xl bg-white text-[#26364d] shadow-2xl`}
+              >
+                {visibleLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={isArabic ? link.arHref : link.href}
