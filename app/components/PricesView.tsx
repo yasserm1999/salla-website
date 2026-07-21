@@ -36,6 +36,7 @@ const UI = {
       press: ["Press", "Iron"],
     },
     recommended: "Recommended",
+    onRequest: "On Request",
     why: "Why",
     recommendedFor: "Recommended for",
     suitableFor: "Suitable for:",
@@ -64,6 +65,7 @@ const UI = {
       press: ["كي", "فقط"],
     },
     recommended: "موصى به",
+    onRequest: "عند الطلب",
     why: "لماذا",
     recommendedFor: "موصى به لـ",
     suitableFor: "مناسب لـ:",
@@ -150,17 +152,23 @@ export default function PricesView({ locale }: { locale: Locale }) {
                 {garmentName(row, locale)}
               </div>
 
-              {METHODS.map((m) => (
-                <PriceCell
-                  key={m}
-                  value={priceLabel(row[m])}
-                  recommended={row.recommended === m}
-                  label={t.recommended}
-                  onClick={() =>
-                    setSelected(selected?.en === row.en ? null : row)
-                  }
-                />
-              ))}
+              {row.onRequest ? (
+                <div className="col-span-4 flex items-center justify-center border-l border-[#ece7e1] py-6 text-base font-semibold text-[#b9925d]">
+                  {t.onRequest}
+                </div>
+              ) : (
+                METHODS.map((m) => (
+                  <PriceCell
+                    key={m}
+                    value={priceLabel(row[m])}
+                    recommended={row.recommended === m}
+                    label={t.recommended}
+                    onClick={() =>
+                      setSelected(selected?.en === row.en ? null : row)
+                    }
+                  />
+                ))
+              )}
 
               {selected?.en === row.en && (
                 <RecommendationCard
@@ -193,16 +201,22 @@ export default function PricesView({ locale }: { locale: Locale }) {
                 {garmentName(row, locale)}
               </div>
 
-              {METHODS.map((m) => (
-                <MobileTableCell
-                  key={m}
-                  value={priceLabel(row[m])}
-                  recommended={row.recommended === m}
-                  onClick={() =>
-                    setSelected(selected?.en === row.en ? null : row)
-                  }
-                />
-              ))}
+              {row.onRequest ? (
+                <div className="col-span-4 flex items-center justify-center border-l border-[#ece7e1] px-1 py-4 text-center text-[11px] font-semibold text-[#b9925d]">
+                  {t.onRequest}
+                </div>
+              ) : (
+                METHODS.map((m) => (
+                  <MobileTableCell
+                    key={m}
+                    value={priceLabel(row[m])}
+                    recommended={row.recommended === m}
+                    onClick={() =>
+                      setSelected(selected?.en === row.en ? null : row)
+                    }
+                  />
+                ))
+              )}
             </div>
           ))}
         </div>

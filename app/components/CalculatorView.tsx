@@ -65,7 +65,9 @@ export default function CalculatorView({ locale }: { locale: Locale }) {
   const [activeCategory, setActiveCategory] = useState<CatId>(CATEGORIES[0].id);
   const [quantities, setQuantities] = useState<Quantities>({});
 
-  const visibleItems = GARMENTS.filter((g) => g.cat === activeCategory);
+  const visibleItems = GARMENTS.filter(
+    (g) => g.cat === activeCategory && !g.onRequest
+  );
 
   const updateQuantity = (key: string, service: Method, value: number) => {
     setQuantities((prev) => ({

@@ -18,6 +18,9 @@ export type Garment = {
   wet: number | null;
   press: number | null;
   recommended: Method;
+  // Shown as "On Request" on the Prices page (no fixed price yet); hidden from
+  // the Calculator since it can't be totalled.
+  onRequest?: boolean;
 };
 
 export const CATEGORIES: { id: CatId; en: string; ar: string }[] = [
@@ -141,7 +144,14 @@ export const GARMENTS: Garment[] = [
   { cat: "home", en: "Small Curtain", ar: "ستارة صغيرة", normal: 0.9, dry: 1.2, wet: 1.4, press: 0.4, recommended: "dry" },
   { cat: "home", en: "Medium Curtain", ar: "ستارة متوسطة", normal: 1.3, dry: 1.7, wet: 2, press: 0.7, recommended: "dry" },
   { cat: "home", en: "Large Curtain", ar: "ستارة كبيرة", normal: 1.7, dry: 2.3, wet: 2.8, press: 0.9, recommended: "dry" },
-  { cat: "home", en: "Carpet (Per Meter)", ar: "سجاد (للمتر)", normal: 1.8, dry: null, wet: null, press: null, recommended: "normal" },
+  // Carpets are priced per square metre (single cleaning price shown under the
+  // first column). Wall-to-wall & on-site cleaning are TBD — add once priced.
+  { cat: "home", en: "Machine-Made Carpet (per m²)", ar: "سجاد صناعي (للمتر²)", normal: 1.8, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Hand-Tufted Carpet (per m²)", ar: "سجاد مغروز يدوياً (للمتر²)", normal: 3.3, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Wool Carpet & Kilim (per m²)", ar: "سجاد وكليم صوف يدوي (للمتر²)", normal: 5.5, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Silk Carpet (per m²)", ar: "سجاد حرير يدوي (للمتر²)", normal: 6.5, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Wall-to-Wall Carpet (per m²)", ar: "موكيت (للمتر²)", normal: null, dry: null, wet: null, press: null, recommended: "normal", onRequest: true },
+  { cat: "home", en: "On-Site Carpet Cleaning", ar: "تنظيف السجاد في الموقع", normal: null, dry: null, wet: null, press: null, recommended: "normal", onRequest: true },
   { cat: "home", en: "Pillow", ar: "وسادة", normal: 0.4, dry: 0.7, wet: 0.9, press: null, recommended: "normal" },
   { cat: "home", en: "Pillow Case", ar: "كيس وسادة", normal: 0.3, dry: null, wet: 0.5, press: 0.1, recommended: "normal" },
   { cat: "home", en: "Duvet Cover (Single)", ar: "غطاء لحاف (فردي)", normal: 1.5, dry: null, wet: 2, press: 0.7, recommended: "normal" },
