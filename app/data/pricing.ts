@@ -148,8 +148,8 @@ export const GARMENTS: Garment[] = [
   // first column). Wall-to-wall & on-site cleaning are TBD — add once priced.
   { cat: "home", en: "Machine-Made Carpet (per m²)", ar: "سجاد صناعي (للمتر²)", normal: 1.8, dry: null, wet: null, press: null, recommended: "normal" },
   { cat: "home", en: "Hand-Tufted Carpet (per m²)", ar: "سجاد مغروز يدوياً (للمتر²)", normal: 3.3, dry: null, wet: null, press: null, recommended: "normal" },
-  { cat: "home", en: "Wool Carpet & Kilim (per m²)", ar: "سجاد وكليم صوف يدوي (للمتر²)", normal: 5.5, dry: null, wet: null, press: null, recommended: "normal" },
-  { cat: "home", en: "Silk Carpet (per m²)", ar: "سجاد حرير يدوي (للمتر²)", normal: 6.5, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Handmade Wool Carpet & Kilim (per m²)", ar: "سجاد وكليم صوف يدوي (للمتر²)", normal: 5.5, dry: null, wet: null, press: null, recommended: "normal" },
+  { cat: "home", en: "Handmade Silk Carpet (per m²)", ar: "سجاد حرير يدوي (للمتر²)", normal: 6.5, dry: null, wet: null, press: null, recommended: "normal" },
   { cat: "home", en: "Wall-to-Wall Carpet (per m²)", ar: "موكيت (للمتر²)", normal: null, dry: null, wet: null, press: null, recommended: "normal", onRequest: true },
   { cat: "home", en: "On-Site Carpet Cleaning", ar: "تنظيف السجاد في الموقع", normal: null, dry: null, wet: null, press: null, recommended: "normal", onRequest: true },
   { cat: "home", en: "Pillow", ar: "وسادة", normal: 0.4, dry: 0.7, wet: 0.9, press: null, recommended: "normal" },
