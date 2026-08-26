@@ -1,17 +1,24 @@
 import { redirect } from "next/navigation";
 import { currentAdmin } from "@/lib/admin-session";
-import { fetchOrders, buildBoard, defaultWindow, CleanCloudError } from "@/lib/cleancloud";
+import {
+  fetchOrders,
+  fetchCustomerNames,
+  buildBoard,
+  defaultWindow,
+  CleanCloudError,
+} from "@/lib/cleancloud";
 import { Board } from "./Board";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Salla — shop dashboard" };
 
 /**
- * The shop, sorted by what breaks a promise first.
+ * The shop, sorted by what it still owes.
  *
- * Late is the worst thing that can happen; about to be late is the second.
- * A clean bag nobody has collected is money standing still — worth chasing,
- * never worth chasing before a deadline.
+ * Lateness is measured against work, not collection: once the washing is done
+ * the shop has kept its promise, and a bag waiting on the rack is the
+ * customer's errand. So the top of this page is only ever orders that are
+ * still to be cleaned.
  */
 export default async function AdminPage() {
   const admin = await currentAdmin();
@@ -22,6 +29,26 @@ export default async function AdminPage() {
   try {
     const orders = await fetchOrders(from, to);
     const board = buildBoard(orders);
+
+    /*
+      Names cost one request each, so they are fetched only for the orders the
+      shop still owes work on — the ones somebody might have to ring about.
+      The rack can run to fifty bags and nobody is calling those today.
+    */
+    const needNames = [
+      ...board.groups.late,
+      ...board.groups.today,
+      ...board.groups.soon,
+    ].map((o) => o.customerID);
+
+    const names = await fetchCustomerNames(needNames);
+    for (const key of ["late", "today", "soon"] as const) {
+      board.groups[key] = board.groups[key].map((o) => ({
+        ...o,
+        customerName: names.get(o.customerID) ?? null,
+      }));
+    }
+
     return <Board board={{ ...board, windowFrom: from, windowTo: to }} admin={admin} />;
   } catch (e) {
     const message =
@@ -34,7 +61,7 @@ export default async function AdminPage() {
         </p>
         <p className="mt-3 text-sm text-slate-500">
           The orders live in CleanCloud, so this page is only as available as they are.
-          Nothing here is stored locally — reload once it answers again.
+          Nothing is stored here — reload once it answers again.
         </p>
       </main>
     );

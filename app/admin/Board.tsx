@@ -1,16 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Urgency } from "@/lib/cleancloud";
 
 /**
  * The dashboard.
  *
- * Read top to bottom it answers one question — what will make us late — and
- * only then the slower ones about money sitting on the rack. The ordering is
- * the whole design: anything that puts a promise at risk is above anything
- * that merely costs.
+ * Everything above the fold is work the shop still owes. A clean bag waiting
+ * on the rack is the customer's errand — it appears, with its value and how
+ * long it has been there, but never above something still to be washed.
  */
 
 const BANDS: {
@@ -20,22 +19,25 @@ const BANDS: {
   ring: string;
   chip: string;
   bar: string;
+  openByDefault?: boolean;
 }[] = [
   {
-    key: "overdue",
-    title: "Late",
-    blurb: "Promised before today and still here. Deal with these first.",
+    key: "late",
+    title: "Late — still not washed",
+    blurb: "Promised for a day already gone and the work is not done.",
     ring: "border-red-300 bg-red-50",
     chip: "bg-red-600 text-white",
     bar: "bg-red-600",
+    openByDefault: true,
   },
   {
     key: "today",
     title: "Due today",
-    blurb: "Promised for today. Still keepable.",
+    blurb: "Must be washed and ready before the hour promised.",
     ring: "border-amber-300 bg-amber-50",
     chip: "bg-amber-500 text-white",
     bar: "bg-amber-500",
+    openByDefault: true,
   },
   {
     key: "soon",
@@ -46,52 +48,44 @@ const BANDS: {
     bar: "bg-sky-600",
   },
   {
-    key: "resting",
-    title: "Sitting on the rack",
-    blurb: "Clean, paid for or not, and nobody has come. Money standing still.",
-    ring: "border-slate-300 bg-slate-50",
-    chip: "bg-slate-500 text-white",
-    bar: "bg-slate-400",
-  },
-  {
     key: "later",
-    title: "Comfortably ahead",
-    blurb: "Nothing to do yet.",
+    title: "Further out",
+    blurb: "Received, with time in hand.",
     ring: "border-slate-200 bg-white",
     chip: "bg-slate-200 text-slate-700",
     bar: "bg-slate-300",
+  },
+  {
+    key: "ready",
+    title: "Washed — waiting for collection",
+    blurb: "The work is done. Nothing here is the shop being late.",
+    ring: "border-emerald-200 bg-emerald-50",
+    chip: "bg-emerald-600 text-white",
+    bar: "bg-emerald-500",
   },
 ];
 
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function dueLabel(o: Assessed): string {
+function whenLabel(o: Assessed): string {
+  const time = o.dueTimeLabel ? ` ${o.dueTimeLabel}` : "";
   if (o.daysUntilDue === null) return "no promised date";
   if (o.daysUntilDue < 0) {
     const d = Math.abs(o.daysUntilDue);
-    return `${d} day${d === 1 ? "" : "s"} late`;
+    return `${d} day${d === 1 ? "" : "s"} late${time ? ` · was due${time}` : ""}`;
   }
-  if (o.daysUntilDue === 0) return "due today";
-  if (o.daysUntilDue === 1) return "due tomorrow";
-  return `due in ${o.daysUntilDue} days`;
+  if (o.daysUntilDue === 0) return `today${time}`;
+  if (o.daysUntilDue === 1) return `tomorrow${time}`;
+  return `in ${o.daysUntilDue} days${time}`;
 }
 
 export function Board({ board, admin }: { board: BoardData; admin: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState<Urgency | null>("overdue");
-  const [onlyUnwashed, setOnlyUnwashed] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>(
+    Object.fromEntries(BANDS.map((b) => [b.key, !!b.openByDefault]))
+  );
   const t = board.totals;
-
-  const filtered = useMemo(() => {
-    const out = {} as Record<Urgency, Assessed[]>;
-    for (const b of BANDS) {
-      out[b.key] = onlyUnwashed
-        ? board.groups[b.key].filter((o) => !o.cleaned)
-        : board.groups[b.key];
-    }
-    return out;
-  }, [board, onlyUnwashed]);
 
   async function signOut() {
     await fetch("/api/admin", { method: "DELETE" });
@@ -105,7 +99,8 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shop dashboard</h1>
           <p className="text-sm text-slate-500">
-            {t.pending} orders still in the shop · read{" "}
+            {t.owed} order{t.owed === 1 ? "" : "s"} still to wash · {t.ready} washed and waiting ·
+            read{" "}
             {new Date(board.generatedAt).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -128,62 +123,51 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
         </div>
       </header>
 
-      {/* ── The headline: what is at risk ─────────────────────────── */}
+      {/* ── What the shop still owes ──────────────────────────────── */}
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Headline
           label="Late"
-          value={t.overdue}
+          value={t.late}
           note={
-            t.overdue > 0
-              ? `worst is ${t.worstDaysLate} days over · ${money(t.valueOverdue)} tied up`
-              : "nothing has been missed"
+            t.late > 0
+              ? `worst is ${t.worstDaysLate} day${t.worstDaysLate === 1 ? "" : "s"} over · ${money(t.valueLate)}`
+              : "nothing is overdue"
           }
-          tone={t.overdue > 0 ? "bad" : "good"}
+          tone={t.late > 0 ? "bad" : "good"}
         />
         <Headline
           label="Due today"
           value={t.dueToday}
-          note={t.notCleanedYet > 0 ? `${t.notCleanedYet} in the shop still unwashed` : "all washed"}
+          note={t.dueToday > 0 ? "wash before the hour promised" : "nothing promised for today"}
           tone={t.dueToday > 0 ? "warn" : "plain"}
         />
         <Headline
           label="Next two days"
           value={t.dueSoon}
-          note="time to plan the day around"
+          note="worth planning the day around"
           tone="plain"
         />
       </div>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
-        <span className="text-slate-500">
-          <b className="text-slate-900">{t.onRackOverWeek}</b> waiting on the rack over a week
-          <span className="text-slate-400"> · {money(t.valueOnRack)} in the shop</span>
-        </span>
-        <span className="text-slate-500">
-          <b className="text-slate-900">{t.finishedUnpaid}</b> collected but never paid
-        </span>
-        <label className="ml-auto flex items-center gap-2 text-slate-600">
-          <input
-            type="checkbox"
-            checked={onlyUnwashed}
-            onChange={(e) => setOnlyUnwashed(e.target.checked)}
-            className="h-4 w-4 accent-sky-600"
-          />
-          Only what is still unwashed
-        </label>
-      </div>
+      <p className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <b>{t.ready}</b> orders are washed and waiting to be collected
+        {t.readyOverWeek > 0 && <> — {t.readyOverWeek} for over a week</>} ·{" "}
+        {money(t.valueReady)} on the rack
+        {t.unpaidReady > 0 && <>, {t.unpaidReady} of them not yet paid</>}. The work is
+        done on all of these.
+      </p>
 
-      {/* ── The bands, worst first ────────────────────────────────── */}
+      {/* ── The bands ─────────────────────────────────────────────── */}
       <div className="space-y-3">
         {BANDS.map((band) => {
-          const rows = filtered[band.key];
-          const isOpen = open === band.key;
+          const rows = board.groups[band.key];
+          const isOpen = open[band.key];
           const value = rows.reduce((s, o) => s + o.total, 0);
 
           return (
             <section key={band.key} className={`overflow-hidden rounded-xl border ${band.ring}`}>
               <button
-                onClick={() => setOpen(isOpen ? null : band.key)}
+                onClick={() => setOpen((s) => ({ ...s, [band.key]: !s[band.key] }))}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
                 <span
@@ -201,43 +185,55 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
                 </span>
               </button>
 
-              {isOpen && rows.length > 0 && (
+              {isOpen && (
                 <div className="border-t border-white/60 bg-white/70">
-                  <ul className="divide-y divide-slate-100">
-                    {rows.slice(0, 60).map((o) => (
-                      <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-                        <span className={`h-8 w-1 shrink-0 rounded ${band.bar}`} />
-                        <span className="min-w-[9rem] flex-1">
-                          <span className="block text-sm font-semibold text-slate-900">
-                            #{o.id}
-                            <span className="ml-2 font-normal text-slate-500">
-                              {o.cleaned ? "washed, on the rack" : "not washed yet"}
+                  {rows.length === 0 ? (
+                    <p className="px-4 py-4 text-center text-sm text-slate-500">Nothing here.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {rows.slice(0, 60).map((o) => (
+                        <li
+                          key={o.id}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
+                        >
+                          <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
+
+                          <span className="min-w-[11rem] flex-1">
+                            <span className="block text-sm font-semibold text-slate-900">
+                              {o.customerName ?? `Customer ${o.customerID}`}
+                              <span className="ml-2 font-mono text-xs font-normal text-slate-400">
+                                #{o.id}
+                              </span>
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {o.summary || o.notes || `${o.pieces} pieces`}
+                              {o.rack && ` · rack ${o.rack}`}
                             </span>
                           </span>
-                          <span className="block truncate text-xs text-slate-500">
-                            {o.summary || o.notes || `${o.pieces} pieces`}
-                            {o.rack && ` · rack ${o.rack}`}
+
+                          <span className="shrink-0 text-sm font-bold text-slate-800">
+                            {whenLabel(o)}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-xs font-semibold text-slate-700">
-                          {dueLabel(o)}
-                        </span>
-                        {o.daysOnRack !== null && o.daysOnRack >= 3 && (
-                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
-                            {o.daysOnRack}d on rack
+
+                          {band.key === "ready" && o.daysOnRack !== null && (
+                            <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                              {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on rack`}
+                            </span>
+                          )}
+
+                          {!o.paid && (
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                              unpaid
+                            </span>
+                          )}
+
+                          <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
+                            {money(o.total)}
                           </span>
-                        )}
-                        {!o.paid && (
-                          <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                            unpaid
-                          </span>
-                        )}
-                        <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
-                          {money(o.total)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {rows.length > 60 && (
                     <p className="px-4 py-2 text-xs text-slate-500">
                       Showing 60 of {rows.length}.
@@ -245,20 +241,15 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
                   )}
                 </div>
               )}
-
-              {isOpen && rows.length === 0 && (
-                <p className="border-t border-white/60 bg-white/70 px-4 py-4 text-center text-sm text-slate-500">
-                  Nothing here.
-                </p>
-              )}
             </section>
           );
         })}
       </div>
 
       <p className="mt-6 text-xs text-slate-400">
-        Orders created between {board.windowFrom} and {board.windowTo}. Read live from
-        CleanCloud each time this page loads — nothing is copied or stored here.
+        Orders created between {board.windowFrom} and {board.windowTo}, read live from
+        CleanCloud each time this page loads. Customer names are fetched only for the
+        orders still to be washed.
       </p>
     </main>
   );

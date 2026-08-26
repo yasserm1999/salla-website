@@ -3,15 +3,19 @@ import "server-only";
 /**
  * Reading the shop out of CleanCloud.
  *
- * Two things about this API decide the whole shape of the code below:
+ * Three things about this API decide the shape of everything below:
  *
- *   1. Every date comes back as a Unix timestamp inside a string — "1787473850",
- *      not "2026-08-26". Comparing those as text says every order is late,
- *      which is both wrong and the most alarming way to be wrong.
+ *   1. Every date comes back as a Unix timestamp inside a string —
+ *      "1787473850", not "2026-08-26". Comparing those as text says every
+ *      order is late, which is both wrong and the most alarming way to be
+ *      wrong.
  *
  *   2. `status` is the truth about where an order is. `completedDate` is only
  *      filled in once it is collected, so testing that field marks everything
  *      still in the shop as finished.
+ *
+ *   3. `deliveryDate` carries the day and `deliveryTime` carries the hour, as
+ *      a human string — "5pm", "7pm-8pm". The hour is not in the timestamp.
  */
 
 const API = "https://cleancloudapp.com/api";
@@ -22,8 +26,6 @@ export const STATUS = {
   CLEANED: "1",
   COLLECTED: "2",
 } as const;
-
-export type RawOrder = Record<string, unknown>;
 
 export type Order = {
   id: string;
@@ -36,21 +38,40 @@ export type Order = {
   createdAt: Date | null;
   cleanedAt: Date | null;
   collectedAt: Date | null;
-  /** When it was promised back to the customer. */
+  /** The day it was promised back. The hour lives in dueTimeLabel. */
   dueAt: Date | null;
+  /** As the shop writes it: "5pm", "7pm-8pm". */
+  dueTimeLabel: string | null;
   rack: string | null;
   notes: string | null;
   summary: string | null;
 };
 
-/** "1787473850" → Date. "0", "" and nonsense → null. */
 function at(value: unknown): Date | null {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? new Date(n * 1000) : null;
 }
 
-function toOrder(raw: RawOrder): Order {
+/**
+ * "5pm" → 17:00. "7pm-8pm" → the start, 19:00. Used only for putting the day
+ * in order, never for deciding whether something is late — a promise made for
+ * "5pm" is not broken at 5:01.
+ */
+export function dueMinutes(label: string | null): number | null {
+  if (!label) return null;
+  const m = label.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const mins = Number(m[2] ?? 0);
+  const meridiem = m[3];
+  if (meridiem === "pm" && hour !== 12) hour += 12;
+  if (meridiem === "am" && hour === 12) hour = 0;
+  return hour * 60 + mins;
+}
+
+function toOrder(raw: Record<string, unknown>): Order {
   const s = (k: string) => (raw[k] == null ? null : String(raw[k]));
+  const time = s("deliveryTime");
   return {
     id: String(raw.id ?? ""),
     customerID: String(raw.customerID ?? ""),
@@ -62,6 +83,7 @@ function toOrder(raw: RawOrder): Order {
     cleanedAt: at(raw.cleanedDate),
     collectedAt: at(raw.completedDate),
     dueAt: at(raw.deliveryDate),
+    dueTimeLabel: time && time !== "0" && time !== "0-0" ? time : null,
     rack: s("rack") && s("rack") !== "0" ? s("rack") : null,
     notes: s("notes") || null,
     summary: s("summary") || null,
@@ -70,14 +92,7 @@ function toOrder(raw: RawOrder): Order {
 
 export class CleanCloudError extends Error {}
 
-/**
- * Every order between two days.
- *
- * The undocumented part: `getOrders` refuses a bare call, and the "Filter"
- * it asks for in the error message does not appear to exist. A date range
- * does, and is the only way to see the whole shop rather than one customer.
- */
-export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Order[]> {
+async function post(endpoint: string, body: Record<string, unknown>) {
   const token = process.env.CLEANCLOUD_API_KEY;
   if (!token) throw new CleanCloudError("CLEANCLOUD_API_KEY is not set.");
 
@@ -85,36 +100,79 @@ export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Ord
   // The host drops a connection now and then; one timeout is not an answer.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(`${API}/getOrders`, {
+      const res = await fetch(`${API}/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_token: token, dateFrom, dateTo }),
+        body: JSON.stringify({ api_token: token, ...body }),
         cache: "no-store",
       });
       const data = await res.json();
       if (data?.Error) throw new CleanCloudError(String(data.Error));
-      const list = Array.isArray(data?.Orders) ? data.Orders : [];
-      return list.map(toOrder);
+      return data;
     } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
       if (e instanceof CleanCloudError) throw e;
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      lastError = e instanceof Error ? e.message : String(e);
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
     }
   }
   throw new CleanCloudError(`CleanCloud did not answer: ${lastError}`);
 }
 
-// ── Sorting the shop by what actually matters ──────────────────────────
+/**
+ * Every order between two days.
+ *
+ * The undocumented part: `getOrders` refuses a bare call and asks for a
+ * "Filter" that does not appear to exist. A date range does, and is the only
+ * way to see the whole shop rather than one customer at a time.
+ */
+export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Order[]> {
+  const data = await post("getOrders", { dateFrom, dateTo });
+  return (Array.isArray(data?.Orders) ? data.Orders : []).map(toOrder);
+}
 
-export type Urgency = "overdue" | "today" | "soon" | "later" | "resting" | "collected";
+/**
+ * Names for the orders being shown.
+ *
+ * There is no list endpoint, so this is one call per customer — fetched only
+ * for the handful on screen, a few at a time so a slow shop day does not turn
+ * into fifty simultaneous requests.
+ */
+export async function fetchCustomerNames(ids: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const unique = [...new Set(ids.filter(Boolean))];
+
+  const BATCH = 5;
+  for (let i = 0; i < unique.length; i += BATCH) {
+    const slice = unique.slice(i, i + BATCH);
+    const results = await Promise.all(
+      slice.map(async (id) => {
+        try {
+          const c = await post("getCustomer", { customerID: id });
+          const name = c?.Name ?? c?.Customer?.Name;
+          return [id, typeof name === "string" && name.trim() ? name.trim() : null] as const;
+        } catch {
+          // A missing name must never take the board down with it.
+          return [id, null] as const;
+        }
+      })
+    );
+    for (const [id, name] of results) if (name) names.set(id, name);
+  }
+  return names;
+}
+
+// ── Sorting the shop by what it owes ───────────────────────────────────
+
+export type Urgency = "late" | "today" | "soon" | "later" | "ready" | "collected";
 
 export type Assessed = Order & {
   urgency: Urgency;
-  /** Negative when late, 0 today, positive when still ahead. */
+  /** Negative when past the promised day, 0 today, positive when ahead. */
   daysUntilDue: number | null;
-  /** How long it has been finished and waiting, in days. */
+  /** Days finished and waiting for someone to come. */
   daysOnRack: number | null;
   cleaned: boolean;
+  customerName: string | null;
 };
 
 const DAY = 86_400_000;
@@ -123,31 +181,34 @@ const startOfDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.
 /**
  * How much attention an order deserves.
  *
- * Being late is the worst thing that can happen, and being about to be late is
- * the second. A clean bag nobody has collected is money sitting still — worth
- * chasing, but it is not a promise being broken, so it never outranks a
- * deadline.
+ * The shop's promise is to have the washing done. Once it is done the promise
+ * is kept — a clean bag waiting on the rack is the customer's errand, not the
+ * shop's failure, however long it sits there.
+ *
+ * So lateness is measured only against work still owed: an order past its day
+ * that has not been cleaned is late, and one that has been cleaned is simply
+ * ready. That is why the two lists look so different in size.
  */
 export function assess(order: Order, now = new Date()): Assessed {
   const today = startOfDay(now);
-  const cleaned = order.status === STATUS.CLEANED;
+  const cleaned = order.status !== STATUS.RECEIVED;
 
-  const daysUntilDue = order.dueAt
-    ? Math.round((startOfDay(order.dueAt) - today) / DAY)
-    : null;
-
-  const daysOnRack = cleaned && order.cleanedAt
-    ? Math.floor((today - startOfDay(order.cleanedAt)) / DAY)
-    : null;
+  const daysUntilDue = order.dueAt ? Math.round((startOfDay(order.dueAt) - today) / DAY) : null;
+  const daysOnRack =
+    order.status === STATUS.CLEANED && order.cleanedAt
+      ? Math.floor((today - startOfDay(order.cleanedAt)) / DAY)
+      : null;
 
   let urgency: Urgency;
   if (order.status === STATUS.COLLECTED) {
     urgency = "collected";
+  } else if (order.status === STATUS.CLEANED) {
+    // Washed and folded. Nothing is owed but the customer's own trip.
+    urgency = "ready";
   } else if (daysUntilDue === null) {
-    // No promise made. It cannot be late, so it waits with the rest.
-    urgency = daysOnRack !== null && daysOnRack >= 7 ? "resting" : "later";
+    urgency = "later";
   } else if (daysUntilDue < 0) {
-    urgency = "overdue";
+    urgency = "late";
   } else if (daysUntilDue === 0) {
     urgency = "today";
   } else if (daysUntilDue <= 2) {
@@ -156,18 +217,22 @@ export function assess(order: Order, now = new Date()): Assessed {
     urgency = "later";
   }
 
-  /*
-    A bag that has sat a week is worth chasing, but only once its own deadline
-    is comfortably ahead — otherwise the deadline is the story, not the dust.
-  */
-  if (urgency === "later" && daysOnRack !== null && daysOnRack >= 7) {
-    urgency = "resting";
-  }
-
-  return { ...order, urgency, daysUntilDue, daysOnRack, cleaned };
+  return { ...order, urgency, daysUntilDue, daysOnRack, cleaned, customerName: null };
 }
 
-export const URGENCY_ORDER: Urgency[] = ["overdue", "today", "soon", "later", "resting", "collected"];
+/** Worst first, and within a day, earliest promise first. */
+function byUrgencyThenTime(a: Assessed, b: Assessed): number {
+  const byDay = (a.daysUntilDue ?? 9999) - (b.daysUntilDue ?? 9999);
+  if (byDay !== 0) return byDay;
+  const at = dueMinutes(a.dueTimeLabel);
+  const bt = dueMinutes(b.dueTimeLabel);
+  if (at !== null && bt !== null && at !== bt) return at - bt;
+  if (at !== null && bt === null) return -1;
+  if (at === null && bt !== null) return 1;
+  return b.total - a.total;
+}
+
+export const URGENCY_ORDER: Urgency[] = ["late", "today", "soon", "later", "ready", "collected"];
 
 export type Board = {
   generatedAt: string;
@@ -175,20 +240,19 @@ export type Board = {
   windowTo: string;
   groups: Record<Urgency, Assessed[]>;
   totals: {
-    pending: number;
-    overdue: number;
+    owed: number;
+    late: number;
     dueToday: number;
     dueSoon: number;
-    onRackOverWeek: number;
-    finishedUnpaid: number;
-    valueOverdue: number;
-    valueOnRack: number;
-    notCleanedYet: number;
+    ready: number;
+    readyOverWeek: number;
+    valueLate: number;
+    valueReady: number;
     worstDaysLate: number;
+    unpaidReady: number;
   };
 };
 
-/** Everything the dashboard shows, worked out once. */
 export function buildBoard(orders: Order[], now = new Date()): Board {
   const assessed = orders.map((o) => assess(o, now));
 
@@ -197,18 +261,11 @@ export function buildBoard(orders: Order[], now = new Date()): Board {
   ) as Record<Urgency, Assessed[]>;
   for (const o of assessed) groups[o.urgency].push(o);
 
-  // Worst first inside every group: most overdue, then largest.
-  for (const u of URGENCY_ORDER) {
-    groups[u].sort((a, b) => {
-      const byDue = (a.daysUntilDue ?? 9999) - (b.daysUntilDue ?? 9999);
-      if (byDue !== 0) return byDue;
-      return b.total - a.total;
-    });
-  }
+  for (const u of URGENCY_ORDER) groups[u].sort(byUrgencyThenTime);
+  // The rack is read oldest-first: those are the ones to ring about.
+  groups.ready.sort((a, b) => (b.daysOnRack ?? 0) - (a.daysOnRack ?? 0));
 
-  const pending = assessed.filter((o) => o.status !== STATUS.COLLECTED);
-  const overdue = groups.overdue;
-  const onRack = pending.filter((o) => (o.daysOnRack ?? 0) >= 7);
+  const owed = groups.late.length + groups.today.length + groups.soon.length + groups.later.length;
 
   return {
     generatedAt: now.toISOString(),
@@ -216,16 +273,16 @@ export function buildBoard(orders: Order[], now = new Date()): Board {
     windowTo: "",
     groups,
     totals: {
-      pending: pending.length,
-      overdue: overdue.length,
+      owed,
+      late: groups.late.length,
       dueToday: groups.today.length,
       dueSoon: groups.soon.length,
-      onRackOverWeek: onRack.length,
-      finishedUnpaid: assessed.filter((o) => o.status === STATUS.COLLECTED && !o.paid).length,
-      valueOverdue: overdue.reduce((s, o) => s + o.total, 0),
-      valueOnRack: pending.reduce((s, o) => s + o.total, 0),
-      notCleanedYet: pending.filter((o) => o.status === STATUS.RECEIVED).length,
-      worstDaysLate: overdue.length ? Math.abs(overdue[0].daysUntilDue ?? 0) : 0,
+      ready: groups.ready.length,
+      readyOverWeek: groups.ready.filter((o) => (o.daysOnRack ?? 0) >= 7).length,
+      valueLate: groups.late.reduce((s, o) => s + o.total, 0),
+      valueReady: groups.ready.reduce((s, o) => s + o.total, 0),
+      worstDaysLate: groups.late.length ? Math.abs(groups.late[0].daysUntilDue ?? 0) : 0,
+      unpaidReady: groups.ready.filter((o) => !o.paid).length,
     },
   };
 }
