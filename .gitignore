@@ -40,3 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 Salla Prices.xlsx 
+.vercel
+.env*
