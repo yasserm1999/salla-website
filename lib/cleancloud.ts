@@ -45,6 +45,11 @@ export type Order = {
   rack: string | null;
   notes: string | null;
   summary: string | null;
+  /** True when the shop drives it to them rather than the customer coming. */
+  isDelivery: boolean;
+  /** CleanCloud's own receipt, which lists every line. */
+  receiptUrl: string | null;
+  tax: number;
 };
 
 function at(value: unknown): Date | null {
@@ -87,6 +92,9 @@ function toOrder(raw: Record<string, unknown>): Order {
     rack: s("rack") && s("rack") !== "0" ? s("rack") : null,
     notes: s("notes") || null,
     summary: s("summary") || null,
+    isDelivery: String(raw.delivery) === "1",
+    receiptUrl: s("receiptLink") ? `https://cleancloudapp.com/${s("receiptLink")}` : null,
+    tax: Number(raw.tax1 ?? 0) + Number(raw.tax2 ?? 0) + Number(raw.tax3 ?? 0),
   };
 }
 
@@ -137,8 +145,10 @@ export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Ord
  * for the handful on screen, a few at a time so a slow shop day does not turn
  * into fifty simultaneous requests.
  */
-export async function fetchCustomerNames(ids: string[]): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
+export type CustomerBrief = { name: string | null; tel: string | null; place: string | null };
+
+export async function fetchCustomers(ids: string[]): Promise<Map<string, CustomerBrief>> {
+  const found = new Map<string, CustomerBrief>();
   const unique = [...new Set(ids.filter(Boolean))];
 
   const BATCH = 5;
@@ -148,22 +158,39 @@ export async function fetchCustomerNames(ids: string[]): Promise<Map<string, str
       slice.map(async (id) => {
         try {
           const c = await post("getCustomer", { customerID: id });
-          const name = c?.Name ?? c?.Customer?.Name;
-          return [id, typeof name === "string" && name.trim() ? name.trim() : null] as const;
+          const r = c?.Customer ?? c;
+          const text = (v: unknown) =>
+            typeof v === "string" && v.trim() ? v.trim() : null;
+          return [
+            id,
+            {
+              name: text(r?.Name),
+              tel: text(r?.Tel),
+              // Whichever the shop actually filled in for this person.
+              place: text(r?.addressDetailed) ?? text(r?.Address) ?? text(r?.Notes),
+            },
+          ] as const;
         } catch {
-          // A missing name must never take the board down with it.
+          // One missing customer must never take the board down with it.
           return [id, null] as const;
         }
       })
     );
-    for (const [id, name] of results) if (name) names.set(id, name);
+    for (const [id, brief] of results) if (brief) found.set(id, brief);
   }
-  return names;
+  return found;
 }
 
 // ── Sorting the shop by what it owes ───────────────────────────────────
 
-export type Urgency = "late" | "today" | "soon" | "later" | "ready" | "collected";
+export type Urgency =
+  | "late"
+  | "today"
+  | "tomorrow"
+  | "inTwo"
+  | "later"
+  | "ready"
+  | "collected";
 
 export type Assessed = Order & {
   urgency: Urgency;
@@ -173,10 +200,39 @@ export type Assessed = Order & {
   daysOnRack: number | null;
   cleaned: boolean;
   customerName: string | null;
+  customerTel: string | null;
+  customerPlace: string | null;
 };
 
 const DAY = 86_400_000;
-const startOfDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+
+/**
+ * The shop's own calendar.
+ *
+ * Oman runs four hours ahead of UTC, so from 8pm onwards the two disagree
+ * about what day it is — and 8pm onwards is exactly when a laundry promising
+ * "5pm" and "10pm" needs the answer. Doing this arithmetic in UTC put
+ * tomorrow's work under "next two days" for the whole evening, every evening.
+ *
+ * Oman keeps no daylight saving, but this asks the timezone database rather
+ * than hard-coding four hours, so it stays right if that ever changes.
+ */
+const SHOP_TZ = "Asia/Muscat";
+
+const shopDateFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: SHOP_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** The civil date in the shop, as YYYY-MM-DD. */
+export function shopYmd(d: Date): string {
+  return shopDateFormat.format(d);
+}
+
+/** Midnight in the shop, as a number that can be subtracted. */
+const startOfDay = (d: Date) => Date.parse(`${shopYmd(d)}T00:00:00Z`);
 
 /**
  * How much attention an order deserves.
@@ -211,13 +267,25 @@ export function assess(order: Order, now = new Date()): Assessed {
     urgency = "late";
   } else if (daysUntilDue === 0) {
     urgency = "today";
-  } else if (daysUntilDue <= 2) {
-    urgency = "soon";
+  } else if (daysUntilDue === 1) {
+    urgency = "tomorrow";
+  } else if (daysUntilDue === 2) {
+    urgency = "inTwo";
   } else {
+    // Everything further out is one heap; nothing about it changes today.
     urgency = "later";
   }
 
-  return { ...order, urgency, daysUntilDue, daysOnRack, cleaned, customerName: null };
+  return {
+    ...order,
+    urgency,
+    daysUntilDue,
+    daysOnRack,
+    cleaned,
+    customerName: null,
+    customerTel: null,
+    customerPlace: null,
+  };
 }
 
 /** Worst first, and within a day, earliest promise first. */
@@ -232,7 +300,15 @@ function byUrgencyThenTime(a: Assessed, b: Assessed): number {
   return b.total - a.total;
 }
 
-export const URGENCY_ORDER: Urgency[] = ["late", "today", "soon", "later", "ready", "collected"];
+export const URGENCY_ORDER: Urgency[] = [
+  "late",
+  "today",
+  "tomorrow",
+  "inTwo",
+  "later",
+  "ready",
+  "collected",
+];
 
 export type Board = {
   generatedAt: string;
@@ -243,7 +319,9 @@ export type Board = {
     owed: number;
     late: number;
     dueToday: number;
-    dueSoon: number;
+    dueTomorrow: number;
+    dueInTwo: number;
+    dueLater: number;
     ready: number;
     readyOverWeek: number;
     valueLate: number;
@@ -265,7 +343,12 @@ export function buildBoard(orders: Order[], now = new Date()): Board {
   // The rack is read oldest-first: those are the ones to ring about.
   groups.ready.sort((a, b) => (b.daysOnRack ?? 0) - (a.daysOnRack ?? 0));
 
-  const owed = groups.late.length + groups.today.length + groups.soon.length + groups.later.length;
+  const owed =
+    groups.late.length +
+    groups.today.length +
+    groups.tomorrow.length +
+    groups.inTwo.length +
+    groups.later.length;
 
   return {
     generatedAt: now.toISOString(),
@@ -276,7 +359,9 @@ export function buildBoard(orders: Order[], now = new Date()): Board {
       owed,
       late: groups.late.length,
       dueToday: groups.today.length,
-      dueSoon: groups.soon.length,
+      dueTomorrow: groups.tomorrow.length,
+      dueInTwo: groups.inTwo.length,
+      dueLater: groups.later.length,
       ready: groups.ready.length,
       readyOverWeek: groups.ready.filter((o) => (o.daysOnRack ?? 0) >= 7).length,
       valueLate: groups.late.reduce((s, o) => s + o.total, 0),
@@ -289,6 +374,230 @@ export function buildBoard(orders: Order[], now = new Date()): Board {
 
 /** Today and the ninety days behind it, which is where anything open lives. */
 export function defaultWindow(now = new Date()): { from: string; to: string } {
-  const ymd = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: ymd(new Date(now.getTime() - 90 * DAY)), to: ymd(now) };
+  /*
+    Asked for in the shop's dates. In UTC the window ends yesterday all
+    evening, which quietly hides orders taken in after 8pm — the busiest
+    hours of the day.
+  */
+  return { from: shopYmd(new Date(now.getTime() - 90 * DAY)), to: shopYmd(now) };
+}
+
+// ── The driver's day ───────────────────────────────────────────────────
+
+export type Run = {
+  /** The shop's date, YYYY-MM-DD. */
+  day: string;
+  label: string;
+  stops: Assessed[];
+  /** Stops whose washing is not finished — those hold the van up. */
+  notReady: number;
+  value: number;
+};
+
+/**
+ * What has to go out on the van, by day.
+ *
+ * Separate from the wash queue because it answers a different question. The
+ * bands above ask "what must we finish"; this asks "who is driving where, and
+ * in what order" — and a stop whose washing is not done is the one that keeps
+ * the van waiting, so it is counted rather than buried in the list.
+ *
+ * Only orders still in the shop appear. Once delivered, CleanCloud marks them
+ * collected like any other, and they are somebody else's memory.
+ */
+export function buildRuns(orders: Order[], now = new Date()): Run[] {
+  const today = shopYmd(now);
+  const tomorrow = shopYmd(new Date(now.getTime() + DAY));
+
+  const outstanding = orders
+    .map((o) => assess(o, now))
+    .filter((o) => o.isDelivery && o.status !== STATUS.COLLECTED);
+
+  const byDay = new Map<string, Assessed[]>();
+  for (const o of outstanding) {
+    const day = o.dueAt ? shopYmd(o.dueAt) : "unscheduled";
+    const list = byDay.get(day) ?? [];
+    list.push(o);
+    byDay.set(day, list);
+  }
+
+  const runs: Run[] = [];
+  for (const [day, stops] of byDay) {
+    // Down the clock, so a route can be driven in the order it is read.
+    stops.sort((a, b) => {
+      const at = dueMinutes(a.dueTimeLabel);
+      const bt = dueMinutes(b.dueTimeLabel);
+      if (at !== null && bt !== null && at !== bt) return at - bt;
+      if (at !== null && bt === null) return -1;
+      if (at === null && bt !== null) return 1;
+      return Number(a.id) - Number(b.id);
+    });
+
+    const label =
+      day === today
+        ? "Today"
+        : day === tomorrow
+          ? "Tomorrow"
+          : day === "unscheduled"
+            ? "No date set"
+            : day < today
+              ? `Missed — was due ${day}`
+              : day;
+
+    runs.push({
+      day,
+      label,
+      stops,
+      notReady: stops.filter((o) => !o.cleaned).length,
+      value: stops.reduce((s, o) => s + o.total, 0),
+    });
+  }
+
+  /*
+    Today first, because this list exists to plan a driver and the driver is
+    going out today. Days already past come last, under their own label: a
+    delivery that never happened is worth seeing, but it is a management
+    problem rather than a route.
+  */
+  const rank = (day: string) => {
+    if (day === today) return 0;
+    if (day === "unscheduled") return 3;
+    if (day > today) return 1;
+    return 2;
+  };
+  return runs.sort((a, b) => {
+    const byRank = rank(a.day) - rank(b.day);
+    if (byRank !== 0) return byRank;
+    // Within upcoming, soonest first; within missed, oldest first.
+    return rank(a.day) === 2 ? a.day.localeCompare(b.day) : a.day.localeCompare(b.day);
+  });
+}
+
+// ── The one-glance summary ─────────────────────────────────────────────
+
+export type Money = { amount: number; count: number };
+
+/**
+ * What was actually taken between two days.
+ *
+ * Read from payments rather than order totals: an order written today and paid
+ * next week is next week's money, and a laundry that counts it twice will
+ * always think it is doing better than it is.
+ */
+export async function fetchTakings(dateFrom: string, dateTo: string): Promise<Money> {
+  const data = await post("getPayments", { dateFrom, dateTo });
+  const list: unknown[] = Array.isArray(data?.payments) ? data.payments : [];
+  const amount = list.reduce<number>(
+    (s, p) => s + Number((p as { amount?: unknown })?.amount ?? 0),
+    0
+  );
+  return { amount, count: list.length };
+}
+
+export type Summary = {
+  late: number;
+  dueToday: number;
+  drivingToday: number;
+  takenInToday: number;
+  onRack: number;
+  onRackValue: number;
+  unpaidOnRack: number;
+  revenueToday: Money;
+  revenueMonth: Money;
+  /** Days from taking it in to having it washed, over the last month. */
+  averageTurnaroundDays: number | null;
+};
+
+export function buildSummary(
+  orders: Order[],
+  board: Board,
+  runs: Run[],
+  revenueToday: Money,
+  revenueMonth: Money,
+  now = new Date()
+): Summary {
+  const today = shopYmd(now);
+
+  const takenInToday = orders.filter((o) => o.createdAt && shopYmd(o.createdAt) === today).length;
+
+  /*
+    Turnaround is measured on work finished in the last month, not on
+    everything ever — a shop that was slow in January should not still be
+    apologising for it in August.
+  */
+  const monthAgo = now.getTime() - 30 * DAY;
+  const finished = orders.filter(
+    (o) => o.createdAt && o.cleanedAt && o.cleanedAt.getTime() >= monthAgo
+  );
+  const averageTurnaroundDays = finished.length
+    ? finished.reduce((s, o) => s + (o.cleanedAt!.getTime() - o.createdAt!.getTime()), 0) /
+      finished.length /
+      DAY
+    : null;
+
+  const todayRun = runs.find((r) => r.day === today);
+
+  return {
+    late: board.totals.late,
+    dueToday: board.totals.dueToday,
+    drivingToday: todayRun?.stops.length ?? 0,
+    takenInToday,
+    onRack: board.totals.ready,
+    onRackValue: board.totals.valueReady,
+    unpaidOnRack: board.totals.unpaidReady,
+    revenueToday,
+    revenueMonth,
+    averageTurnaroundDays,
+  };
+}
+
+/** The first of this month, in the shop's calendar. */
+export function monthStart(now = new Date()): string {
+  return `${shopYmd(now).slice(0, 7)}-01`;
+}
+
+// ── Money handed over but never collected ──────────────────────────────
+
+/**
+ * The rack number the shop uses to mean "gone out, still owes us".
+ *
+ * A shop convention rather than anything CleanCloud knows about, so it lives
+ * in the environment and can change without a deploy.
+ */
+export const PENDING_PAYMENT_RACK = process.env.PENDING_PAYMENT_RACK ?? "200";
+
+export type Debt = Assessed & { daysOwing: number | null };
+
+/**
+ * Who owes the shop money for washing already in their hands.
+ *
+ * Two ways an order gets here: it sits on the pending-payment rack, or
+ * CleanCloud has it as collected with nothing paid. Either way the clothes
+ * have gone and the money has not, which is the only list in this app where
+ * the shop is the one owed something.
+ */
+export function buildDebts(orders: Order[], now = new Date()): { rows: Debt[]; total: number } {
+  const rows = orders
+    .filter(
+      (o) =>
+        !o.paid &&
+        o.total > 0 &&
+        (o.rack === PENDING_PAYMENT_RACK || o.status === STATUS.COLLECTED)
+    )
+    .map((o) => {
+      const a = assess(o, now);
+      // Owing runs from the day it left, or from the day it was washed if it
+      // never got a collection stamp.
+      const since = o.collectedAt ?? o.cleanedAt ?? o.createdAt;
+      return {
+        ...a,
+        daysOwing: since
+          ? Math.floor((Date.parse(`${shopYmd(now)}T00:00:00Z`) - Date.parse(`${shopYmd(since)}T00:00:00Z`)) / DAY)
+          : null,
+      };
+    })
+    // Oldest debt first: that is the one least likely to be paid unasked.
+    .sort((a, b) => (b.daysOwing ?? 0) - (a.daysOwing ?? 0));
+
+  return { rows, total: rows.reduce((s, o) => s + o.total, 0) };
 }

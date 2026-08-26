@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Assessed, Board as BoardData, Urgency } from "@/lib/cleancloud";
+import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 
 /**
  * The dashboard.
  *
- * Everything above the fold is work the shop still owes. A clean bag waiting
- * on the rack is the customer's errand — it appears, with its value and how
- * long it has been there, but never above something still to be washed.
+ * Read top to bottom: what the numbers are, what must be washed, who is
+ * driving. A clean bag waiting on the rack appears last, because the shop has
+ * already kept its promise on it — however long it sits there, that is the
+ * customer's errand and not a failure.
  */
 
 const BANDS: {
@@ -24,7 +25,7 @@ const BANDS: {
   {
     key: "late",
     title: "Late — still not washed",
-    blurb: "Promised for a day already gone and the work is not done.",
+    blurb: "Promised for a day already gone, and the work is not done.",
     ring: "border-red-300 bg-red-50",
     chip: "bg-red-600 text-white",
     bar: "bg-red-600",
@@ -33,32 +34,41 @@ const BANDS: {
   {
     key: "today",
     title: "Due today",
-    blurb: "Must be washed and ready before the hour promised.",
+    blurb: "Everything promised for today, driven or collected.",
     ring: "border-amber-300 bg-amber-50",
     chip: "bg-amber-500 text-white",
     bar: "bg-amber-500",
     openByDefault: true,
   },
   {
-    key: "soon",
-    title: "Next two days",
-    blurb: "Close enough that a slow morning turns them late.",
+    key: "tomorrow",
+    title: "Tomorrow",
+    blurb: "Wash today if the day allows it.",
     ring: "border-sky-300 bg-sky-50",
     chip: "bg-sky-600 text-white",
     bar: "bg-sky-600",
+    openByDefault: true,
+  },
+  {
+    key: "inTwo",
+    title: "In two days",
+    blurb: "Comfortable, but worth knowing the size of.",
+    ring: "border-indigo-200 bg-indigo-50",
+    chip: "bg-indigo-500 text-white",
+    bar: "bg-indigo-400",
   },
   {
     key: "later",
-    title: "Further out",
-    blurb: "Received, with time in hand.",
+    title: "Further out — everything else",
+    blurb: "Taken in, with more than two days in hand.",
     ring: "border-slate-200 bg-white",
     chip: "bg-slate-200 text-slate-700",
     bar: "bg-slate-300",
   },
   {
     key: "ready",
-    title: "Washed — waiting for collection",
-    blurb: "The work is done. Nothing here is the shop being late.",
+    title: "Sitting on the rack — all of them",
+    blurb: "Washed and waiting for the customer. None of this is the shop being late.",
     ring: "border-emerald-200 bg-emerald-50",
     chip: "bg-emerald-600 text-white",
     bar: "bg-emerald-500",
@@ -80,12 +90,25 @@ function whenLabel(o: Assessed): string {
   return `in ${o.daysUntilDue} days${time}`;
 }
 
-export function Board({ board, admin }: { board: BoardData; admin: string }) {
+export function Board({
+  board,
+  runs,
+  debts,
+  summary,
+  admin,
+}: {
+  board: BoardData;
+  runs: Run[];
+  debts: { rows: Debt[]; total: number };
+  summary: Summary;
+  admin: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState<Record<string, boolean>>(
     Object.fromEntries(BANDS.map((b) => [b.key, !!b.openByDefault]))
   );
-  const t = board.totals;
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const s = summary;
 
   async function signOut() {
     await fetch("/api/admin", { method: "DELETE" });
@@ -95,11 +118,10 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shop dashboard</h1>
           <p className="text-sm text-slate-500">
-            {t.owed} order{t.owed === 1 ? "" : "s"} still to wash · {t.ready} washed and waiting ·
             read{" "}
             {new Date(board.generatedAt).toLocaleTimeString([], {
               hour: "2-digit",
@@ -123,51 +145,156 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
         </div>
       </header>
 
-      {/* ── What the shop still owes ──────────────────────────────── */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Headline
-          label="Late"
-          value={t.late}
-          note={
-            t.late > 0
-              ? `worst is ${t.worstDaysLate} day${t.worstDaysLate === 1 ? "" : "s"} over · ${money(t.valueLate)}`
-              : "nothing is overdue"
-          }
-          tone={t.late > 0 ? "bad" : "good"}
-        />
-        <Headline
-          label="Due today"
-          value={t.dueToday}
-          note={t.dueToday > 0 ? "wash before the hour promised" : "nothing promised for today"}
-          tone={t.dueToday > 0 ? "warn" : "plain"}
-        />
-        <Headline
-          label="Next two days"
-          value={t.dueSoon}
-          note="worth planning the day around"
+      {/* ── The whole shop in one line of numbers ─────────────────── */}
+      <section className="mb-6 grid gap-2 grid-cols-2 lg:grid-cols-4">
+        <Stat label="Late" value={s.late} tone={s.late > 0 ? "bad" : "good"} note="not washed, past due" />
+        <Stat label="Due today" value={s.dueToday} tone={s.dueToday > 0 ? "warn" : "plain"} note="to finish before closing" />
+        <Stat label="Taken in today" value={s.takenInToday} tone="plain" note="new orders" />
+        <Stat label="Driving today" value={s.drivingToday} tone={s.drivingToday > 0 ? "warn" : "plain"} note="stops on the van" />
+
+        <Stat label="Today's takings" value={money(s.revenueToday.amount)} tone="good" note={`${s.revenueToday.count} payments`} />
+        <Stat label="This month" value={money(s.revenueMonth.amount)} tone="good" note={`${s.revenueMonth.count} payments`} />
+        <Stat
+          label="On the rack"
+          value={s.onRack}
           tone="plain"
+          note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`}
         />
-      </div>
+        <Stat
+          label="Turnaround"
+          value={s.averageTurnaroundDays === null ? "—" : `${s.averageTurnaroundDays.toFixed(1)}d`}
+          tone="plain"
+          note="in to washed, last 30 days"
+        />
+      </section>
 
-      <p className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        <b>{t.ready}</b> orders are washed and waiting to be collected
-        {t.readyOverWeek > 0 && <> — {t.readyOverWeek} for over a week</>} ·{" "}
-        {money(t.valueReady)} on the rack
-        {t.unpaidReady > 0 && <>, {t.unpaidReady} of them not yet paid</>}. The work is
-        done on all of these.
-      </p>
+      {/* ── Washing gone, money not ───────────────────────────────── */}
+      {debts.rows.length > 0 && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-rose-300 bg-rose-50">
+          <div className="px-4 py-3">
+            <p className="font-bold text-slate-900">
+              To collect — {money(debts.total)} across {debts.rows.length} order
+              {debts.rows.length === 1 ? "" : "s"}
+            </p>
+            <p className="text-xs text-slate-600">
+              On the pending-payment rack or already handed over, with nothing paid.
+              Oldest first — that is the one least likely to be paid unasked.
+            </p>
+          </div>
+          <ul className="divide-y divide-rose-100 bg-white/70">
+            {debts.rows.slice(0, 40).map((o) => (
+              <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+                <span className="min-w-[10rem] flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">
+                    {o.customerName ?? `Customer ${o.customerID}`}
+                    <span className="ml-2 font-mono text-xs font-normal text-slate-400">
+                      #{o.id}
+                    </span>
+                  </span>
+                  <span className="block truncate text-xs text-slate-500">
+                    {o.summary || `${o.pieces} pieces`}
+                    {o.rack && ` · rack ${o.rack}`}
+                  </span>
+                </span>
+                {o.daysOwing !== null && (
+                  <span className="shrink-0 text-xs font-semibold text-rose-700">
+                    {o.daysOwing === 0 ? "today" : `${o.daysOwing} days owing`}
+                  </span>
+                )}
+                {o.customerTel && (
+                  <a
+                    href={`tel:${o.customerTel}`}
+                    className="shrink-0 rounded border border-rose-300 px-2 py-0.5 text-xs font-semibold text-rose-700"
+                  >
+                    {o.customerTel}
+                  </a>
+                )}
+                <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
+                  {money(o.total)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {debts.rows.length > 40 && (
+            <p className="bg-white/70 px-4 py-2 text-xs text-slate-500">
+              Showing 40 of {debts.rows.length}.
+            </p>
+          )}
+        </section>
+      )}
 
-      {/* ── The bands ─────────────────────────────────────────────── */}
+      {/* ── The driver's day ──────────────────────────────────────── */}
+      {runs.length > 0 && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-violet-300 bg-violet-50">
+          <div className="px-4 py-3">
+            <p className="font-bold text-slate-900">Deliveries to plan</p>
+            <p className="text-xs text-slate-600">
+              Only orders still in the shop. A stop whose washing is not finished is what
+              keeps the van waiting.
+            </p>
+          </div>
+          <div className="space-y-px bg-violet-200">
+            {runs.map((run) => (
+              <div key={run.day} className="bg-white px-4 py-3">
+                <p className="mb-1.5 flex flex-wrap items-baseline gap-2">
+                  <span className="font-bold text-slate-900">{run.label}</span>
+                  <span className="text-sm text-slate-500">
+                    {run.stops.length} stop{run.stops.length === 1 ? "" : "s"} · {money(run.value)}
+                  </span>
+                  {run.notReady > 0 && (
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
+                      {run.notReady} not washed yet
+                    </span>
+                  )}
+                </p>
+                <ol className="space-y-1">
+                  {run.stops.map((o, i) => (
+                    <li key={o.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                      <span className="w-5 shrink-0 text-xs font-bold text-violet-600">{i + 1}.</span>
+                      <span className="font-medium text-slate-900">
+                        {o.customerName ?? `Customer ${o.customerID}`}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {o.dueTimeLabel ?? "no time"} · #{o.id}
+                      </span>
+                      {o.customerTel && (
+                        <a
+                          href={`tel:${o.customerTel}`}
+                          className="rounded border border-slate-300 px-1.5 text-xs font-semibold text-slate-600"
+                        >
+                          {o.customerTel}
+                        </a>
+                      )}
+                      {!o.cleaned && (
+                        <span className="rounded bg-red-100 px-1.5 text-[11px] font-bold text-red-700">
+                          not washed
+                        </span>
+                      )}
+                      {!o.paid && (
+                        <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
+                          collect {money(o.total)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── The wash queue ────────────────────────────────────────── */}
       <div className="space-y-3">
         {BANDS.map((band) => {
           const rows = board.groups[band.key];
           const isOpen = open[band.key];
-          const value = rows.reduce((s, o) => s + o.total, 0);
+          const value = rows.reduce((sum, o) => sum + o.total, 0);
 
           return (
             <section key={band.key} className={`overflow-hidden rounded-xl border ${band.ring}`}>
               <button
-                onClick={() => setOpen((s) => ({ ...s, [band.key]: !s[band.key] }))}
+                onClick={() => setOpen((st) => ({ ...st, [band.key]: !st[band.key] }))}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
                 <span
@@ -191,52 +318,64 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
                     <p className="px-4 py-4 text-center text-sm text-slate-500">Nothing here.</p>
                   ) : (
                     <ul className="divide-y divide-slate-100">
-                      {rows.slice(0, 60).map((o) => (
-                        <li
-                          key={o.id}
-                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-                        >
-                          <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
+                      {rows.slice(0, 80).map((o) => (
+                        <li key={o.id}>
+                          <button
+                            onClick={() => setExpanded(expanded === o.id ? null : o.id)}
+                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left hover:bg-white"
+                          >
+                            <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
 
-                          <span className="min-w-[11rem] flex-1">
-                            <span className="block text-sm font-semibold text-slate-900">
-                              {o.customerName ?? `Customer ${o.customerID}`}
-                              <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-                                #{o.id}
+                            <span className="min-w-[11rem] flex-1">
+                              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                                {o.customerName ?? `Customer ${o.customerID}`}
+                                {o.isDelivery && (
+                                  <span
+                                    title="Delivered by the van"
+                                    className="rounded bg-violet-100 px-1 text-[10px] font-bold text-violet-700"
+                                  >
+                                    VAN
+                                  </span>
+                                )}
+                                <span className="font-mono text-xs font-normal text-slate-400">
+                                  #{o.id}
+                                </span>
+                              </span>
+                              <span className="block truncate text-xs text-slate-500">
+                                {o.summary || `${o.pieces} pieces`}
+                                {o.rack && ` · rack ${o.rack}`}
                               </span>
                             </span>
-                            <span className="block truncate text-xs text-slate-500">
-                              {o.summary || o.notes || `${o.pieces} pieces`}
-                              {o.rack && ` · rack ${o.rack}`}
+
+                            <span className="shrink-0 text-sm font-bold text-slate-800">
+                              {whenLabel(o)}
                             </span>
-                          </span>
 
-                          <span className="shrink-0 text-sm font-bold text-slate-800">
-                            {whenLabel(o)}
-                          </span>
+                            {band.key === "ready" && o.daysOnRack !== null && (
+                              <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                                {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on rack`}
+                              </span>
+                            )}
 
-                          {band.key === "ready" && o.daysOnRack !== null && (
-                            <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                              {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on rack`}
+                            {!o.paid && (
+                              <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                                unpaid
+                              </span>
+                            )}
+
+                            <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
+                              {money(o.total)}
                             </span>
-                          )}
+                          </button>
 
-                          {!o.paid && (
-                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                              unpaid
-                            </span>
-                          )}
-
-                          <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
-                            {money(o.total)}
-                          </span>
+                          {expanded === o.id && <Detail o={o} />}
                         </li>
                       ))}
                     </ul>
                   )}
-                  {rows.length > 60 && (
+                  {rows.length > 80 && (
                     <p className="px-4 py-2 text-xs text-slate-500">
-                      Showing 60 of {rows.length}.
+                      Showing 80 of {rows.length}.
                     </p>
                   )}
                 </div>
@@ -247,22 +386,62 @@ export function Board({ board, admin }: { board: BoardData; admin: string }) {
       </div>
 
       <p className="mt-6 text-xs text-slate-400">
-        Orders created between {board.windowFrom} and {board.windowTo}, read live from
-        CleanCloud each time this page loads. Customer names are fetched only for the
-        orders still to be washed.
+        Orders taken in between {board.windowFrom} and {board.windowTo}, read live from
+        CleanCloud each time this page loads. Dates and hours are the shop&rsquo;s own —
+        Oman time, not the server&rsquo;s.
       </p>
     </main>
   );
 }
 
-function Headline({
+/** What is actually in the bag, shown only when somebody asks for it. */
+function Detail({ o }: { o: Assessed }) {
+  const rows: [string, string][] = [
+    ["Contents", o.summary || "not itemised"],
+    ["Pieces", String(o.pieces || "—")],
+    ["Taken in", o.createdAt ? o.createdAt.toLocaleString() : "—"],
+    ["Washed", o.cleanedAt ? o.cleanedAt.toLocaleString() : "not yet"],
+    ["Promised", `${o.dueAt ? o.dueAt.toLocaleDateString() : "—"} ${o.dueTimeLabel ?? ""}`.trim()],
+    ["How it goes back", o.isDelivery ? "Delivered by the van" : "Customer collects"],
+    ["Total", `${money(o.total)}${o.tax ? ` (incl. tax ${money(o.tax)})` : ""}`],
+    ["Paid", o.paid ? "yes" : "NO"],
+  ];
+  if (o.customerTel) rows.push(["Phone", o.customerTel]);
+  if (o.customerPlace) rows.push(["Where", o.customerPlace]);
+  if (o.notes) rows.push(["Notes", o.notes]);
+
+  return (
+    <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
+      <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex gap-2">
+            <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-slate-400">{k}</dt>
+            <dd className="min-w-0 flex-1 text-slate-800">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {o.receiptUrl && (
+        <a
+          href={o.receiptUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-block text-xs font-semibold text-sky-700 hover:underline"
+        >
+          Open the full receipt in CleanCloud →
+        </a>
+      )}
+    </div>
+  );
+}
+
+function Stat({
   label,
   value,
   note,
   tone,
 }: {
   label: string;
-  value: number;
+  value: string | number;
   note: string;
   tone: "bad" | "warn" | "good" | "plain";
 }) {
@@ -274,10 +453,10 @@ function Headline({
   }[tone];
 
   return (
-    <div className={`rounded-xl border p-4 ${colour}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-80">{label}</p>
-      <p className="mt-0.5 text-4xl font-bold leading-none">{value}</p>
-      <p className="mt-1.5 text-xs opacity-80">{note}</p>
+    <div className={`rounded-xl border px-3 py-2.5 ${colour}`}>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-wider opacity-75">{label}</p>
+      <p className="mt-0.5 text-2xl font-bold leading-none">{value}</p>
+      <p className="mt-1 text-[0.7rem] opacity-75">{note}</p>
     </div>
   );
 }
