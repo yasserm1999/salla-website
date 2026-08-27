@@ -74,6 +74,17 @@ export function dueMinutes(label: string | null): number | null {
   return hour * 60 + mins;
 }
 
+/** "Dishdasha x 7<br>Shirt x 1" → "Dishdasha x 7 · Shirt x 1". */
+function tidy(value: string | null): string | null {
+  if (!value) return null;
+  const text = value
+    .replace(/<br\s*\/?>/gi, " · ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || null;
+}
+
 function toOrder(raw: Record<string, unknown>): Order {
   const s = (k: string) => (raw[k] == null ? null : String(raw[k]));
   const time = s("deliveryTime");
@@ -90,8 +101,9 @@ function toOrder(raw: Record<string, unknown>): Order {
     dueAt: at(raw.deliveryDate),
     dueTimeLabel: time && time !== "0" && time !== "0-0" ? time : null,
     rack: s("rack") && s("rack") !== "0" ? s("rack") : null,
-    notes: s("notes") || null,
-    summary: s("summary") || null,
+    notes: tidy(s("notes")),
+    // CleanCloud writes the item list with HTML line breaks in it.
+    summary: tidy(s("summary")),
     isDelivery: String(raw.delivery) === "1",
     receiptUrl: s("receiptLink") ? `https://cleancloudapp.com/${s("receiptLink")}` : null,
     tax: Number(raw.tax1 ?? 0) + Number(raw.tax2 ?? 0) + Number(raw.tax3 ?? 0),
@@ -147,37 +159,64 @@ export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Ord
  */
 export type CustomerBrief = { name: string | null; tel: string | null; place: string | null };
 
+/**
+ * Customer records, remembered.
+ *
+ * CleanCloud rate-limits this endpoint hard. Asked five at a time, thirty-one
+ * of forty come back as errors — which is why most of the board read
+ * "Customer 1" instead of a name. Asked one at a time with a breath between,
+ * all forty answer, but twenty names then take ten seconds, and no dashboard
+ * should keep anyone waiting that long.
+ *
+ * So they are cached. A name and a phone number do not change between
+ * lunchtime and closing, and the cache lives as long as the server instance —
+ * the first load of the day pays for the lookups and every one after is free.
+ */
+const customerCache = new Map<string, { brief: CustomerBrief; at: number }>();
+const CACHE_TTL = 12 * 60 * 60 * 1000;
+
+/** Enough to fill the screen without making anyone wait for it. */
+const LOOKUP_BUDGET = 14;
+const LOOKUP_GAP_MS = 110;
+
 export async function fetchCustomers(ids: string[]): Promise<Map<string, CustomerBrief>> {
   const found = new Map<string, CustomerBrief>();
-  const unique = [...new Set(ids.filter(Boolean))];
+  const now = Date.now();
+  const wanted: string[] = [];
 
-  const BATCH = 5;
-  for (let i = 0; i < unique.length; i += BATCH) {
-    const slice = unique.slice(i, i + BATCH);
-    const results = await Promise.all(
-      slice.map(async (id) => {
-        try {
-          const c = await post("getCustomer", { customerID: id });
-          const r = c?.Customer ?? c;
-          const text = (v: unknown) =>
-            typeof v === "string" && v.trim() ? v.trim() : null;
-          return [
-            id,
-            {
-              name: text(r?.Name),
-              tel: text(r?.Tel),
-              // Whichever the shop actually filled in for this person.
-              place: text(r?.addressDetailed) ?? text(r?.Address) ?? text(r?.Notes),
-            },
-          ] as const;
-        } catch {
-          // One missing customer must never take the board down with it.
-          return [id, null] as const;
-        }
-      })
-    );
-    for (const [id, brief] of results) if (brief) found.set(id, brief);
+  // Anything already known is free and does not count against the budget.
+  for (const id of ids) {
+    if (!id || found.has(id)) continue;
+    const hit = customerCache.get(id);
+    if (hit && now - hit.at < CACHE_TTL) found.set(id, hit.brief);
+    else if (!wanted.includes(id)) wanted.push(id);
   }
+
+  /*
+    The budget is a promise about how long this page takes, not about how much
+    we would like to know. Whatever is left over shows as the customer number
+    and fills itself in on the next refresh — a better failure than a
+    dashboard that hangs.
+  */
+  for (const id of wanted.slice(0, LOOKUP_BUDGET)) {
+    try {
+      const c = await post("getCustomer", { customerID: id });
+      const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+      const brief: CustomerBrief = {
+        name: text(c?.Name),
+        tel: text(c?.Tel),
+        place: text(c?.addressDetailed) ?? text(c?.Address) ?? null,
+      };
+      if (brief.name || brief.tel) {
+        customerCache.set(id, { brief, at: now });
+        found.set(id, brief);
+      }
+    } catch {
+      // One missing customer must never take the board down with it.
+    }
+    await new Promise((r) => setTimeout(r, LOOKUP_GAP_MS));
+  }
+
   return found;
 }
 

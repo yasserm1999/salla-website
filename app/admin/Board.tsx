@@ -108,6 +108,13 @@ export function Board({
     Object.fromEntries(BANDS.map((b) => [b.key, !!b.openByDefault]))
   );
   const [expanded, setExpanded] = useState<string | null>(null);
+  /*
+    Every list folds away. Most of the day the question is "how much and how
+    many", not "which" — and a screen of forty rows is harder to read than the
+    one number above it.
+  */
+  const [showDebts, setShowDebts] = useState(false);
+  const [showRuns, setShowRuns] = useState(true);
   const s = summary;
 
   async function signOut() {
@@ -171,16 +178,25 @@ export function Board({
       {/* ── Washing gone, money not ───────────────────────────────── */}
       {debts.rows.length > 0 && (
         <section className="mb-6 overflow-hidden rounded-xl border border-rose-300 bg-rose-50">
-          <div className="px-4 py-3">
-            <p className="font-bold text-slate-900">
-              To collect — {money(debts.total)} across {debts.rows.length} order
-              {debts.rows.length === 1 ? "" : "s"}
-            </p>
-            <p className="text-xs text-slate-600">
-              On the pending-payment rack or already handed over, with nothing paid.
-              Oldest first — that is the one least likely to be paid unasked.
-            </p>
-          </div>
+          <button
+            onClick={() => setShowDebts((v) => !v)}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-slate-900">
+                To collect — {money(debts.total)} across {debts.rows.length} order
+                {debts.rows.length === 1 ? "" : "s"}
+              </span>
+              <span className="block text-xs text-slate-600">
+                On the pending-payment rack or already handed over, with nothing paid.
+                Oldest first — that is the one least likely to be paid unasked.
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-rose-700">
+              {showDebts ? "hide" : "show"}
+            </span>
+          </button>
+          {showDebts && (
           <ul className="divide-y divide-rose-100 bg-white/70">
             {debts.rows.slice(0, 40).map((o) => (
               <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
@@ -215,7 +231,8 @@ export function Board({
               </li>
             ))}
           </ul>
-          {debts.rows.length > 40 && (
+          )}
+          {showDebts && debts.rows.length > 40 && (
             <p className="bg-white/70 px-4 py-2 text-xs text-slate-500">
               Showing 40 of {debts.rows.length}.
             </p>
@@ -226,13 +243,24 @@ export function Board({
       {/* ── The driver's day ──────────────────────────────────────── */}
       {runs.length > 0 && (
         <section className="mb-6 overflow-hidden rounded-xl border border-violet-300 bg-violet-50">
-          <div className="px-4 py-3">
-            <p className="font-bold text-slate-900">Deliveries to plan</p>
-            <p className="text-xs text-slate-600">
-              Only orders still in the shop. A stop whose washing is not finished is what
-              keeps the van waiting.
-            </p>
-          </div>
+          <button
+            onClick={() => setShowRuns((v) => !v)}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-slate-900">
+                Deliveries to plan — {runs.reduce((n, r) => n + r.stops.length, 0)} stops
+              </span>
+              <span className="block text-xs text-slate-600">
+                Only orders still in the shop. A stop whose washing is not finished is
+                what keeps the van waiting.
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-violet-700">
+              {showRuns ? "hide" : "show"}
+            </span>
+          </button>
+          {showRuns && (
           <div className="space-y-px bg-violet-200">
             {runs.map((run) => (
               <div key={run.day} className="bg-white px-4 py-3">
@@ -281,6 +309,7 @@ export function Board({
               </div>
             ))}
           </div>
+          )}
         </section>
       )}
 

@@ -52,13 +52,19 @@ export default async function AdminPage() {
       to be washed, and everything a driver has to take out. Nobody is ringing
       the fifty-odd bags waiting on the rack today.
     */
+    /*
+      In the order they matter, because the lookup budget runs out before the
+      list does. Whoever is owed money and whoever is being driven to today
+      get their name first; the rest fill in over the next few refreshes as
+      the cache warms.
+    */
     const needed = [
+      ...debts.rows,
+      ...runs.flatMap((r) => r.stops),
       ...board.groups.late,
       ...board.groups.today,
       ...board.groups.tomorrow,
       ...board.groups.inTwo,
-      ...runs.flatMap((r) => r.stops),
-      ...debts.rows,
     ].map((o) => o.customerID);
 
     const people = await fetchCustomers(needed);
