@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 
@@ -115,6 +115,55 @@ export function Board({
   */
   const [showDebts, setShowDebts] = useState(false);
   const [showRuns, setShowRuns] = useState(true);
+
+  /*
+    Names arrive after the board does.
+
+    CleanCloud rate-limits customer lookups, so fetching forty of them while
+    the page rendered cost ten seconds — for names most of which nobody opens.
+    Each list now asks for its own when it is shown, and what comes back is
+    kept for the rest of the visit.
+  */
+  const [people, setPeople] = useState<Record<string, { name: string | null; tel: string | null }>>({});
+  const [looking, setLooking] = useState(false);
+
+  const lookUp = useCallback(
+    async (ids: string[]) => {
+      const missing = [...new Set(ids)].filter((id) => id && !(id in people));
+      if (missing.length === 0) return;
+      setLooking(true);
+      try {
+        const res = await fetch("/api/admin/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: missing }),
+        });
+        const data = await res.json();
+        if (data?.people) setPeople((prev) => ({ ...prev, ...data.people }));
+      } catch {
+        // Names are a convenience; the board is still usable without them.
+      } finally {
+        setLooking(false);
+      }
+    },
+    [people]
+  );
+
+  const nameOf = (o: { customerID: string; customerName?: string | null }) =>
+    people[o.customerID]?.name ?? o.customerName ?? `Customer ${o.customerID}`;
+  const telOf = (o: { customerID: string; customerTel?: string | null }) =>
+    people[o.customerID]?.tel ?? o.customerTel ?? null;
+
+  // Whatever is on screen at the start earns its names straight away.
+  useEffect(() => {
+    const visible = [
+      ...(showDebts ? debts.rows : []),
+      ...(showRuns ? runs.flatMap((r) => r.stops) : []),
+      ...BANDS.filter((b) => open[b.key]).flatMap((b) => board.groups[b.key]),
+    ].map((o) => o.customerID);
+    void lookUp(visible.slice(0, 40));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDebts, showRuns, open]);
   const s = summary;
 
   async function signOut() {
@@ -202,7 +251,7 @@ export function Board({
               <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
                 <span className="min-w-[10rem] flex-1">
                   <span className="block text-sm font-semibold text-slate-900">
-                    {o.customerName ?? `Customer ${o.customerID}`}
+                    {nameOf(o)}
                     <span className="ml-2 font-mono text-xs font-normal text-slate-400">
                       #{o.id}
                     </span>
@@ -217,13 +266,11 @@ export function Board({
                     {o.daysOwing === 0 ? "today" : `${o.daysOwing} days owing`}
                   </span>
                 )}
-                {o.customerTel && (
+                {telOf(o) && (
                   <a
-                    href={`tel:${o.customerTel}`}
+                    href={`tel:${telOf(o)}`}
                     className="shrink-0 rounded border border-rose-300 px-2 py-0.5 text-xs font-semibold text-rose-700"
-                  >
-                    {o.customerTel}
-                  </a>
+                  >{telOf(o)}</a>
                 )}
                 <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
                   {money(o.total)}
@@ -280,18 +327,16 @@ export function Board({
                     <li key={o.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
                       <span className="w-5 shrink-0 text-xs font-bold text-violet-600">{i + 1}.</span>
                       <span className="font-medium text-slate-900">
-                        {o.customerName ?? `Customer ${o.customerID}`}
+                        {nameOf(o)}
                       </span>
                       <span className="text-xs text-slate-500">
                         {o.dueTimeLabel ?? "no time"} · #{o.id}
                       </span>
-                      {o.customerTel && (
+                      {telOf(o) && (
                         <a
-                          href={`tel:${o.customerTel}`}
+                          href={`tel:${telOf(o)}`}
                           className="rounded border border-slate-300 px-1.5 text-xs font-semibold text-slate-600"
-                        >
-                          {o.customerTel}
-                        </a>
+                        >{telOf(o)}</a>
                       )}
                       {!o.cleaned && (
                         <span className="rounded bg-red-100 px-1.5 text-[11px] font-bold text-red-700">
@@ -357,7 +402,7 @@ export function Board({
 
                             <span className="min-w-[11rem] flex-1">
                               <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                                {o.customerName ?? `Customer ${o.customerID}`}
+                                {nameOf(o)}
                                 {o.isDelivery && (
                                   <span
                                     title="Delivered by the van"

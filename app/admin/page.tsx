@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { currentAdmin } from "@/lib/admin-session";
 import {
   fetchOrders,
-  fetchCustomers,
   buildBoard,
   buildRuns,
   buildSummary,
@@ -53,42 +52,17 @@ export default async function AdminPage() {
       the fifty-odd bags waiting on the rack today.
     */
     /*
-      In the order they matter, because the lookup budget runs out before the
-      list does. Whoever is owed money and whoever is being driven to today
-      get their name first; the rest fill in over the next few refreshes as
-      the cache warms.
+      Names are not fetched here. CleanCloud rate-limits that endpoint, and
+      waiting for forty of them made every load take ten seconds for names
+      most of which nobody opens. The board draws now; each list asks for its
+      own names when somebody expands it.
     */
-    const needed = [
-      ...debts.rows,
-      ...runs.flatMap((r) => r.stops),
-      ...board.groups.late,
-      ...board.groups.today,
-      ...board.groups.tomorrow,
-      ...board.groups.inTwo,
-    ].map((o) => o.customerID);
-
-    const people = await fetchCustomers(needed);
-    const dress = <T extends { customerID: string }>(o: T) => {
-      const c = people.get(o.customerID);
-      return {
-        ...o,
-        customerName: c?.name ?? null,
-        customerTel: c?.tel ?? null,
-        customerPlace: c?.place ?? null,
-      };
-    };
-
-    for (const key of ["late", "today", "tomorrow", "inTwo"] as const) {
-      board.groups[key] = board.groups[key].map(dress);
-    }
-    const dressedRuns = runs.map((r) => ({ ...r, stops: r.stops.map(dress) }));
-    const dressedDebts = { ...debts, rows: debts.rows.map(dress) };
 
     return (
       <Board
         board={{ ...board, windowFrom: from, windowTo: to }}
-        runs={dressedRuns}
-        debts={dressedDebts}
+        runs={runs}
+        debts={debts}
         summary={summary}
         admin={admin}
       />

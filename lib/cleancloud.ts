@@ -197,7 +197,7 @@ async function lookupCustomer(id: string): Promise<Record<string, unknown>> {
 }
 
 /** Enough to fill the screen without making anyone wait for it. */
-const LOOKUP_BUDGET = 14;
+const LOOKUP_BUDGET = 40;
 const LOOKUP_GAP_MS = 110;
 
 export async function fetchCustomers(ids: string[]): Promise<Map<string, CustomerBrief>> {
@@ -319,8 +319,13 @@ export function assess(order: Order, now = new Date()): Assessed {
   if (order.status === STATUS.COLLECTED) {
     urgency = "collected";
   } else if (order.status === STATUS.CLEANED) {
-    // Washed and folded. Nothing is owed but the customer's own trip.
-    urgency = "ready";
+    /*
+      Washed and folded. Nothing is owed but the customer's own trip — unless
+      it is on the pending-payment rack, in which case it has already gone to
+      them and is not on any rack at all. Counting those as waiting made the
+      rack look fuller than the shop is.
+    */
+    urgency = order.rack === PENDING_PAYMENT_RACK ? "collected" : "ready";
   } else if (daysUntilDue === null) {
     urgency = "later";
   } else if (daysUntilDue < 0) {
@@ -469,9 +474,21 @@ export function buildRuns(orders: Order[], now = new Date()): Run[] {
   const today = shopYmd(now);
   const tomorrow = shopYmd(new Date(now.getTime() + DAY));
 
+  /*
+    An order on the pending-payment rack has already been driven to the
+    customer — the shop is waiting for money, not for a van. Leaving those in
+    made six weeks of settled deliveries look like a failed route, when the
+    only thing outstanding was the payment, which the collect list already
+    tracks.
+  */
   const outstanding = orders
     .map((o) => assess(o, now))
-    .filter((o) => o.isDelivery && o.status !== STATUS.COLLECTED);
+    .filter(
+      (o) =>
+        o.isDelivery &&
+        o.status !== STATUS.COLLECTED &&
+        o.rack !== PENDING_PAYMENT_RACK
+    );
 
   const byDay = new Map<string, Assessed[]>();
   for (const o of outstanding) {
@@ -545,7 +562,16 @@ export type Money = { amount: number; count: number };
  * always think it is doing better than it is.
  */
 export async function fetchTakings(dateFrom: string, dateTo: string): Promise<Money> {
-  const data = await post("getPayments", { dateFrom, dateTo });
+  /*
+    getPayments treats dateTo as exclusive, and getOrders does not.
+
+    Asking for the 26th to the 26th returns nothing at all; the 26th to the
+    27th returns the 26th. So today's takings always read 0.00 and the month
+    was short by whatever came in today — 125.03 the day this was found. The
+    day after the last day wanted is what has to be sent.
+  */
+  const dayAfter = shopYmd(new Date(Date.parse(`${dateTo}T00:00:00Z`) + DAY));
+  const data = await post("getPayments", { dateFrom, dateTo: dayAfter });
   const list: unknown[] = Array.isArray(data?.payments) ? data.payments : [];
   const amount = list.reduce<number>(
     (s, p) => s + Number((p as { amount?: unknown })?.amount ?? 0),
