@@ -634,6 +634,8 @@ export type Summary = {
   revenueMonth: Money;
   /** Days from taking it in to having it washed, over the last month. */
   averageTurnaroundDays: number | null;
+  /** How far past its promise the worst unwashed order is; 0 means due earlier today. */
+  worstDaysLate: number;
 };
 
 export function buildSummary(
@@ -670,8 +672,18 @@ export function buildSummary(
 
   const todayRun = runs.find((r) => r.day === today);
 
+  /*
+    Two late orders are not the same news if one is an hour over and the other
+    a week, so the count carries its worst case with it.
+  */
+  const worstDaysLate = board.groups.late.reduce(
+    (worst, o) => Math.max(worst, o.daysUntilDue === null ? 0 : Math.max(0, -o.daysUntilDue)),
+    0
+  );
+
   return {
     late: board.totals.late,
+    worstDaysLate,
     dueToday: board.totals.dueToday,
     drivingToday: todayRun?.stops.length ?? 0,
     takenInToday,

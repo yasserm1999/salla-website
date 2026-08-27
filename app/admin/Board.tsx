@@ -206,43 +206,126 @@ export function Board({
         </div>
       </header>
 
-      {/* ── The whole shop in one line of numbers ─────────────────── */}
-      <section className="mb-6 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Stat label="Late" value={s.late} tone={s.late > 0 ? "bad" : "good"} note="not washed, past due" />
-        <Stat label="Due today" value={s.dueToday} tone={s.dueToday > 0 ? "warn" : "plain"} note="to finish before closing" />
-        <Stat label="Taken in today" value={s.takenInToday} tone="plain" note="new orders" />
-        <Stat label="Driving today" value={s.drivingToday} tone={s.drivingToday > 0 ? "warn" : "plain"} note="stops on the van" />
-        <Stat
-          label="Sold today"
-          value={money(s.salesToday.amount)}
-          tone="plain"
-          note={`${s.salesToday.count} orders written`}
-        />
-        <Stat
-          label="Taken today"
-          value={money(s.revenueToday.amount)}
-          tone="good"
-          note={`${s.revenueToday.count} payments in`}
-        />
-        <Stat
-          label="Sold this month"
-          value={money(s.salesMonth.amount)}
-          tone="plain"
-          note={`${s.salesMonth.count} orders written`}
-        />
-        <Stat
-          label="Taken this month"
-          value={money(s.revenueMonth.amount)}
-          tone="good"
-          note={`${s.revenueMonth.count} payments in`}
-        />
-        <Stat label="On the rack" value={s.onRack} tone="plain" note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`} />
-        <Stat
-          label="Turnaround"
-          value={s.averageTurnaroundDays === null ? "—" : `${s.averageTurnaroundDays.toFixed(1)}d`}
-          tone="plain"
-          note="in to washed, last 30 days"
-        />
+      {/*
+        Three weights, in the order the eye should travel.
+
+        Today's trade first and largest — it is the question every shopkeeper
+        asks before any other. Then what is at risk, in the colours that mean
+        risk. Everything else is context: true, worth having, and never worth
+        looking at before those two.
+      */}
+
+      {/* ── Today's trade ─────────────────────────────────────────── */}
+      <section className="mb-3 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border-2 border-slate-900 bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Sold today</p>
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+            {money(s.salesToday.amount)}
+          </p>
+          <p className="mt-1.5 text-sm font-medium text-slate-500">
+            {s.salesToday.count} order{s.salesToday.count === 1 ? "" : "s"} written today
+          </p>
+        </div>
+
+        <div className="rounded-2xl border-2 border-emerald-600 bg-emerald-50 px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+            Taken today
+          </p>
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-emerald-700">
+            {money(s.revenueToday.amount)}
+          </p>
+          <p className="mt-1.5 text-sm font-medium text-emerald-700/80">
+            {s.revenueToday.count} payment{s.revenueToday.count === 1 ? "" : "s"} in
+          </p>
+        </div>
+
+        <div className="rounded-2xl border-2 border-slate-300 bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Orders in today
+          </p>
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+            {s.takenInToday}
+          </p>
+          <p className="mt-1.5 text-sm font-medium text-slate-500">
+            {s.drivingToday} to be driven out
+          </p>
+        </div>
+      </section>
+
+      {/* ── What is at risk ───────────────────────────────────────── */}
+      <section className="mb-6 grid gap-3 sm:grid-cols-2">
+        <div
+          className={`rounded-2xl border-2 px-5 py-3.5 ${
+            s.late > 0 ? "border-red-500 bg-red-50" : "border-emerald-300 bg-emerald-50"
+          }`}
+        >
+          <div className="flex items-baseline gap-3">
+            <p
+              className={`text-4xl font-black leading-none ${
+                s.late > 0 ? "text-red-700" : "text-emerald-700"
+              }`}
+            >
+              {s.late}
+            </p>
+            <p
+              className={`text-sm font-bold uppercase tracking-wider ${
+                s.late > 0 ? "text-red-700" : "text-emerald-700"
+              }`}
+            >
+              Late
+            </p>
+          </div>
+          <p className={`mt-1 text-xs ${s.late > 0 ? "text-red-700/80" : "text-emerald-700/80"}`}>
+            {s.late > 0
+              ? `still not washed · worst ${s.worstDaysLate === 0 ? "overdue today" : `${s.worstDaysLate}d over`}`
+              : "nothing has been missed"}
+          </p>
+        </div>
+
+        <div
+          className={`rounded-2xl border-2 px-5 py-3.5 ${
+            s.dueToday > 0 ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white"
+          }`}
+        >
+          <div className="flex items-baseline gap-3">
+            <p
+              className={`text-4xl font-black leading-none ${
+                s.dueToday > 0 ? "text-amber-700" : "text-slate-900"
+              }`}
+            >
+              {s.dueToday}
+            </p>
+            <p
+              className={`text-sm font-bold uppercase tracking-wider ${
+                s.dueToday > 0 ? "text-amber-700" : "text-slate-500"
+              }`}
+            >
+              Due today
+            </p>
+          </div>
+          <p
+            className={`mt-1 text-xs ${s.dueToday > 0 ? "text-amber-700/80" : "text-slate-500"}`}
+          >
+            {s.dueToday > 0 ? "to finish before the hour promised" : "nothing left for today"}
+          </p>
+        </div>
+      </section>
+
+      {/* ── Everything else, quietly ──────────────────────────────── */}
+      <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <p className="mb-2 text-[0.68rem] font-bold uppercase tracking-widest text-slate-400">
+          The rest of the picture
+        </p>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+          <Small label="Sold this month" value={money(s.salesMonth.amount)} note={`${s.salesMonth.count} orders`} />
+          <Small label="Taken this month" value={money(s.revenueMonth.amount)} note={`${s.revenueMonth.count} payments`} />
+          <Small label="On the rack" value={String(s.onRack)} note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`} />
+          <Small
+            label="Turnaround"
+            value={s.averageTurnaroundDays === null ? "—" : `${s.averageTurnaroundDays.toFixed(1)}d`}
+            note="in to washed, 30 days"
+          />
+        </dl>
       </section>
 
       <div className="space-y-3">
@@ -557,29 +640,15 @@ function Detail({ o, name, tel }: { o: Assessed; name: string; tel: string | nul
   );
 }
 
-function Stat({
-  label,
-  value,
-  note,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  note: string;
-  tone: "bad" | "warn" | "good" | "plain";
-}) {
-  const colour = {
-    bad: "border-red-300 bg-red-50 text-red-700",
-    warn: "border-amber-300 bg-amber-50 text-amber-800",
-    good: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    plain: "border-slate-200 bg-white text-slate-900",
-  }[tone];
-
+/** Context, set deliberately small so it never competes with the top. */
+function Small({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${colour}`}>
-      <p className="text-[0.68rem] font-semibold uppercase tracking-wider opacity-75">{label}</p>
-      <p className="mt-0.5 text-2xl font-bold leading-none">{value}</p>
-      <p className="mt-1 text-[0.7rem] opacity-75">{note}</p>
+    <div>
+      <dt className="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </dt>
+      <dd className="text-lg font-bold leading-tight text-slate-800">{value}</dd>
+      <dd className="text-[0.7rem] text-slate-500">{note}</dd>
     </div>
   );
 }
