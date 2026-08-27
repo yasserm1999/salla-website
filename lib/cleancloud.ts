@@ -131,27 +131,71 @@ function toOrder(raw: Record<string, unknown>): Order {
 
 export class CleanCloudError extends Error {}
 
+/*
+  CleanCloud counts requests per second, and a dashboard is a burst by nature:
+  the page wants orders and two ranges of payments the moment it loads, and the
+  browser then asks for a screenful of customer names. Fired together that is
+  refused, and the refusal used to take the whole page down.
+
+  So every call in this file queues behind the last one and leaves a gap. It
+  costs a fraction of a second on a page that already waits seconds for the
+  orders, and it turns a burst into a queue.
+
+  This is per running instance, not global — two of them under load can still
+  collide — which is why the retry below exists as well.
+*/
+const MIN_GAP_MS = 120;
+let lastCallEnded = 0;
+let queue: Promise<unknown> = Promise.resolve();
+
+function inTurn<T>(work: () => Promise<T>): Promise<T> {
+  const mine = queue.then(async () => {
+    const wait = MIN_GAP_MS - (Date.now() - lastCallEnded);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try {
+      return await work();
+    } finally {
+      lastCallEnded = Date.now();
+    }
+  });
+  // The queue must survive a failure, or one bad call blocks every later one.
+  queue = mine.then(
+    () => undefined,
+    () => undefined
+  );
+  return mine;
+}
+
+/** Being told to slow down is not a failure — it is an instruction to wait. */
+function isRateLimit(e: unknown): boolean {
+  return e instanceof CleanCloudError && /rate limit|too many requests/i.test(e.message);
+}
+
 async function post(endpoint: string, body: Record<string, unknown>) {
   const token = process.env.CLEANCLOUD_API_KEY;
   if (!token) throw new CleanCloudError("CLEANCLOUD_API_KEY is not set.");
 
   let lastError = "";
   // The host drops a connection now and then; one timeout is not an answer.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const res = await fetch(`${API}/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_token: token, ...body }),
-        cache: "no-store",
+      return await inTurn(async () => {
+        const res = await fetch(`${API}/${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_token: token, ...body }),
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (data?.Error) throw new CleanCloudError(String(data.Error));
+        return data;
       });
-      const data = await res.json();
-      if (data?.Error) throw new CleanCloudError(String(data.Error));
-      return data;
     } catch (e) {
-      if (e instanceof CleanCloudError) throw e;
+      // A real complaint — a bad token, an unknown order — will not improve
+      // by being asked again. Only slow down and try once more.
+      if (e instanceof CleanCloudError && !isRateLimit(e)) throw e;
       lastError = e instanceof Error ? e.message : String(e);
-      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, (isRateLimit(e) ? 500 : 1200) * (attempt + 1)));
     }
   }
   throw new CleanCloudError(`CleanCloud did not answer: ${lastError}`);
@@ -231,7 +275,6 @@ async function lookupCustomer(id: string): Promise<Record<string, unknown>> {
 
 /** Enough to fill the screen without making anyone wait for it. */
 const LOOKUP_BUDGET = 40;
-const LOOKUP_GAP_MS = 110;
 
 export async function fetchCustomers(ids: string[]): Promise<Map<string, CustomerBrief>> {
   const found = new Map<string, CustomerBrief>();
@@ -268,7 +311,7 @@ export async function fetchCustomers(ids: string[]): Promise<Map<string, Custome
     } catch {
       // One missing customer must never take the board down with it.
     }
-    await new Promise((r) => setTimeout(r, LOOKUP_GAP_MS));
+    // No pause here: post() already queues every call and leaves a gap.
   }
 
   return found;
