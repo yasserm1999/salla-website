@@ -26,7 +26,9 @@ const money = (n: number) =>
 function dayName(day: string): string {
   const parsed = Date.parse(`${day}T12:00:00Z`);
   if (Number.isNaN(parsed)) return "";
-  return new Date(parsed).toLocaleDateString(undefined, {
+  // Pinned rather than left to the locale: this renders on a server with no
+  // opinion, which defaults to the American month-first order.
+  return new Date(parsed).toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
