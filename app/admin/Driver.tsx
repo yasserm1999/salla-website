@@ -22,6 +22,17 @@ type Person = { name: string | null; tel: string | null; place: string | null };
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "2026-08-27" as a person says it: "Thu 27 Aug". */
+function dayName(day: string): string {
+  const parsed = Date.parse(`${day}T12:00:00Z`);
+  if (Number.isNaN(parsed)) return "";
+  return new Date(parsed).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 /** "7pm-8pm" as it should be read: with a proper dash, and no shouting. */
 const window = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
 
@@ -121,16 +132,28 @@ function RunBlock({
   people: Record<string, Person>;
   highlight?: boolean;
 }) {
-  const missed = run.label === "Missed" || run.label.startsWith("Missed");
+  const missed = run.label.startsWith("Missed");
+
+  /*
+    Which day a stop belongs to decides whether the driver leaves now or
+    tomorrow, so it cannot be a grey caption. Today is navy and loud, missed is
+    red, everything else is quiet — and the calendar date is spelled out beside
+    it, because "Tomorrow" on a page loaded last night is a trap.
+  */
+  const bar = missed
+    ? "bg-red-600 text-white"
+    : highlight
+      ? "bg-[#26364d] text-white"
+      : "bg-[#e6dccf] text-[#26364d]";
+
   return (
     <section className="mb-6">
       <h2
-        className={`mb-2 flex items-baseline gap-2 text-sm font-bold uppercase tracking-widest ${
-          missed ? "text-red-700" : highlight ? "text-[#26364d]" : "text-[#8a9099]"
-        }`}
+        className={`mb-2.5 flex flex-wrap items-baseline gap-x-3 rounded-lg px-4 py-2.5 ${bar}`}
       >
-        {run.label}
-        <span className="text-xs font-medium normal-case tracking-normal text-[#b8b1a8]">
+        <span className="text-xl font-black uppercase tracking-wide">{run.label}</span>
+        <span className="text-sm font-semibold opacity-80">{dayName(run.day)}</span>
+        <span className="ml-auto text-sm font-bold">
           {run.stops.length} {run.stops.length === 1 ? "stop" : "stops"}
         </span>
       </h2>

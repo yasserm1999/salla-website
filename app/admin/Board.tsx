@@ -79,6 +79,17 @@ const BANDS: Record<
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "2026-08-27" as a person says it: "Thu 27 Aug". */
+function runDay(day: string): string {
+  const parsed = Date.parse(`${day}T12:00:00Z`);
+  if (Number.isNaN(parsed)) return "";
+  return new Date(parsed).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function whenLabel(o: Assessed): string {
   const time = o.dueTimeLabel ? ` ${o.dueTimeLabel}` : "";
   if (o.daysUntilDue === null) return "no promised date";
@@ -422,14 +433,25 @@ export function Board({
                   <div className="space-y-px bg-violet-200">
                     {runs.map((run) => (
                       <div key={run.day} className="bg-white px-4 py-3">
-                        <p className="mb-1.5 flex flex-wrap items-baseline gap-2">
-                          <span className="font-bold text-[#26364d]">{run.label}</span>
-                          <span className="text-sm text-[#8a9099]">
+                        <p
+                          className={`mb-2 flex flex-wrap items-baseline gap-x-3 rounded-lg px-3 py-2 ${
+                            run.label.startsWith("Missed")
+                              ? "bg-red-600 text-white"
+                              : run.label === "Today"
+                                ? "bg-[#26364d] text-white"
+                                : "bg-[#e6dccf] text-[#26364d]"
+                          }`}
+                        >
+                          <span className="text-lg font-black uppercase tracking-wide">
+                            {run.label}
+                          </span>
+                          <span className="text-xs font-semibold opacity-80">{runDay(run.day)}</span>
+                          <span className="text-sm font-semibold opacity-90">
                             {run.stops.length} stop{run.stops.length === 1 ? "" : "s"} ·{" "}
                             {money(run.value)}
                           </span>
                           {run.notReady > 0 && (
-                            <span className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
+                            <span className="ml-auto rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
                               {run.notReady} not washed yet
                             </span>
                           )}
