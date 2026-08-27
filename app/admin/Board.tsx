@@ -440,11 +440,27 @@ export function Board({
                               <span className="w-5 shrink-0 text-xs font-bold text-violet-600">
                                 {i + 1}.
                               </span>
-                              <span className="font-medium text-[#26364d]">{nameOf(o)}</span>
-                              <span className="text-xs text-[#8a9099]">
-                                {o.dueTimeLabel ?? "no time"}
+                              <span className="w-24 shrink-0 text-sm font-black text-[#26364d]">
+                                {o.dueTimeLabel?.replace(/s*-s*/, "–") ?? (
+                                  <span className="font-medium text-[#b8b1a8]">no time</span>
+                                )}
                               </span>
+                              <span className="font-medium text-[#26364d]">{nameOf(o)}</span>
                               <Tags customerID={o.customerID} orderID={o.id} />
+                              {o.cleaned ? (
+                                <span className="rounded bg-emerald-600 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                  Ready
+                                </span>
+                              ) : (
+                                <span className="rounded bg-amber-500 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                  Washing
+                                </span>
+                              )}
+                              {o.rack && (
+                                <span className="rounded border border-[#26364d] px-1.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
+                                  Rack {o.rack}
+                                </span>
+                              )}
                               {telOf(o) && (
                                 <a
                                   href={`tel:${telOf(o)}`}
@@ -452,11 +468,6 @@ export function Board({
                                 >
                                   {telOf(o)}
                                 </a>
-                              )}
-                              {!o.cleaned && (
-                                <span className="rounded bg-red-100 px-1.5 text-[11px] font-bold text-red-700">
-                                  not washed
-                                </span>
                               )}
                               {!o.paid && (
                                 <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
