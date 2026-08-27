@@ -175,6 +175,27 @@ export type CustomerBrief = { name: string | null; tel: string | null; place: st
 const customerCache = new Map<string, { brief: CustomerBrief; at: number }>();
 const CACHE_TTL = 12 * 60 * 60 * 1000;
 
+/**
+ * One customer, insisting politely.
+ *
+ * A refusal here is almost always the rate limiter rather than a missing
+ * customer — the same id asked again a moment later answers. The generic
+ * caller treats any Error as final, which is right for a bad request and
+ * wrong for this, so this one waits and asks again.
+ */
+async function lookupCustomer(id: string): Promise<Record<string, unknown>> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await post("getCustomer", { customerID: id });
+    } catch (e) {
+      last = e;
+      await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+    }
+  }
+  throw last;
+}
+
 /** Enough to fill the screen without making anyone wait for it. */
 const LOOKUP_BUDGET = 14;
 const LOOKUP_GAP_MS = 110;
@@ -200,7 +221,7 @@ export async function fetchCustomers(ids: string[]): Promise<Map<string, Custome
   */
   for (const id of wanted.slice(0, LOOKUP_BUDGET)) {
     try {
-      const c = await post("getCustomer", { customerID: id });
+      const c = await lookupCustomer(id);
       const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
       const brief: CustomerBrief = {
         name: text(c?.Name),
