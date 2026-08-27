@@ -453,51 +453,69 @@ export function Board({
                             {money(run.value)}
                           </span>
                           {run.notReady > 0 && (
-                            <span className="ml-auto rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
+                            <span className="rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-bold text-red-700 sm:ml-auto">
                               {run.notReady} not washed yet
                             </span>
                           )}
                         </p>
                         <ol className="space-y-1">
                           {run.stops.map((o, i) => (
-                            <li key={o.id} className="flex flex-wrap items-center gap-x-2 text-sm">
-                              <span className="w-5 shrink-0 text-xs font-bold text-violet-600">
+                            /*
+                              Two lines on a phone, one on a desk.
+
+                              This was a single wrapping row, which on a narrow
+                              screen broke wherever it happened to run out of
+                              width — a badge stranded on its own line, the
+                              time and the name split apart. The stop is now a
+                              block: who and when on top, what state it is in
+                              underneath, and the number down the side.
+                            */
+                            <li key={o.id} className="flex gap-2 text-sm">
+                              <span className="w-5 shrink-0 pt-0.5 text-xs font-bold text-violet-600">
                                 {i + 1}.
                               </span>
-                              <span className="w-24 shrink-0 text-sm font-black text-[#26364d]">
-                                {o.dueTimeLabel?.replace(/s*-s*/, "–") ?? (
-                                  <span className="font-medium text-[#b8b1a8]">no time</span>
-                                )}
-                              </span>
-                              <span className="font-medium text-[#26364d]">{nameOf(o)}</span>
-                              <Tags customerID={o.customerID} orderID={o.id} />
-                              {o.cleaned ? (
-                                <span className="rounded bg-emerald-600 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                  Ready
-                                </span>
-                              ) : (
-                                <span className="rounded bg-amber-500 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                  Washing
-                                </span>
-                              )}
-                              {o.rack && (
-                                <span className="rounded border border-[#26364d] px-1.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
-                                  Rack {o.rack}
-                                </span>
-                              )}
-                              {telOf(o) && (
-                                <a
-                                  href={`tel:${telOf(o)}`}
-                                  className="rounded border border-[#d8cbbd] px-1.5 text-xs font-semibold text-[#546d83]"
-                                >
-                                  {telOf(o)}
-                                </a>
-                              )}
-                              {!o.paid && (
-                                <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
-                                  collect {money(o.total)}
-                                </span>
-                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-baseline gap-x-2">
+                                  <span className="font-black text-[#26364d]">
+                                    {o.dueTimeLabel?.replace(/\s*-\s*/, "–") ?? (
+                                      <span className="font-medium text-[#b8b1a8]">no time</span>
+                                    )}
+                                  </span>
+                                  <span className="truncate font-medium text-[#26364d]">
+                                    {nameOf(o)}
+                                  </span>
+                                  <Tags customerID={o.customerID} orderID={o.id} />
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {o.cleaned ? (
+                                    <span className="rounded bg-emerald-600 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                      Ready
+                                    </span>
+                                  ) : (
+                                    <span className="rounded bg-amber-500 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                      Washing
+                                    </span>
+                                  )}
+                                  {o.rack && (
+                                    <span className="rounded border border-[#26364d] px-1.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
+                                      Rack {o.rack}
+                                    </span>
+                                  )}
+                                  {telOf(o) && (
+                                    <a
+                                      href={`tel:${telOf(o)}`}
+                                      className="rounded border border-[#d8cbbd] px-1.5 text-xs font-semibold text-[#546d83]"
+                                    >
+                                      {telOf(o)}
+                                    </a>
+                                  )}
+                                  {!o.paid && (
+                                    <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
+                                      collect {money(o.total)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </li>
                           ))}
                         </ol>
@@ -591,10 +609,10 @@ export function Board({
                         <li key={o.id}>
                           <button
                             onClick={() => setExpanded(expanded === o.id ? null : o.id)}
-                            className="flex w-full flex-wrap items-center gap-x-3 px-4 py-2.5 text-left hover:bg-white"
+                            className="flex w-full items-start gap-x-3 px-4 py-2.5 text-left hover:bg-white"
                           >
                             <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
-                            <span className="min-w-[11rem] flex-1">
+                            <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5 text-sm font-semibold text-[#26364d]">
                                 {nameOf(o)}
                                 {o.isDelivery && (
@@ -610,41 +628,34 @@ export function Board({
                               <span className="block truncate text-xs text-[#8a9099]">
                                 {o.summary || `${o.pieces} pieces`}
                               </span>
+                              <span className="mt-1 flex flex-wrap items-center gap-1.5 sm:hidden">
+                                <StateBadges o={o} />
+                                <span className="text-xs font-black text-[#26364d]">
+                                  {whenLabel(o)}
+                                </span>
+                                {!o.paid && <UnpaidBadge />}
+                                <span className="ml-auto text-sm font-bold text-[#26364d]">
+                                  {money(o.total)}
+                                </span>
+                              </span>
                             </span>
-                            <span className="flex shrink-0 items-center gap-1">
-                              {o.status === "2" ? (
-                                <span className="rounded bg-[#ece7e1] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#8a9099]">
-                                  Collected
-                                </span>
-                              ) : o.cleaned ? (
-                                <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                  Ready
-                                </span>
-                              ) : (
-                                <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                  Washing
-                                </span>
-                              )}
-                              {o.rack && (
-                                <span className="rounded border border-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
-                                  Rack {o.rack}
-                                </span>
-                              )}
+                            <span className="hidden shrink-0 items-center gap-1 sm:flex">
+                              <StateBadges o={o} />
                             </span>
-                            <span className="shrink-0 text-sm font-black text-[#26364d]">
+                            <span className="hidden shrink-0 text-sm font-black text-[#26364d] sm:block">
                               {whenLabel(o)}
                             </span>
                             {key === "ready" && o.daysOnRack !== null && (
-                              <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                              <span className="hidden shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 sm:block">
                                 {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on rack`}
                               </span>
                             )}
                             {!o.paid && (
-                              <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                                unpaid
+                              <span className="hidden shrink-0 sm:block">
+                                <UnpaidBadge />
                               </span>
                             )}
-                            <span className="w-20 shrink-0 text-right text-sm font-bold text-[#26364d]">
+                            <span className="hidden w-20 shrink-0 text-right text-sm font-bold text-[#26364d] sm:block">
                               {money(o.total)}
                             </span>
                           </button>
@@ -679,6 +690,40 @@ export function Board({
  * some people by their number; the order number after it, smaller, since it
  * is what CleanCloud calls the job rather than what anybody says out loud.
  */
+/** Ready, washing or collected — said the same way wherever it appears. */
+function StateBadges({ o }: { o: Assessed }) {
+  return (
+    <>
+      {o.status === "2" ? (
+        <span className="rounded bg-[#ece7e1] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#8a9099]">
+          Collected
+        </span>
+      ) : o.cleaned ? (
+        <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+          Ready
+        </span>
+      ) : (
+        <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+          Washing
+        </span>
+      )}
+      {o.rack && (
+        <span className="rounded border border-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
+          Rack {o.rack}
+        </span>
+      )}
+    </>
+  );
+}
+
+function UnpaidBadge() {
+  return (
+    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
+      unpaid
+    </span>
+  );
+}
+
 function Tags({ customerID, orderID }: { customerID: string; orderID: string }) {
   return (
     <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
