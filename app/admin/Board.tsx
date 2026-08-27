@@ -209,10 +209,10 @@ export function Board({
       {/*
         Three weights, in the order the eye should travel.
 
-        Today's trade first and largest — it is the question every shopkeeper
-        asks before any other. Then what is at risk, in the colours that mean
-        risk. Everything else is context: true, worth having, and never worth
-        looking at before those two.
+        Sales first and largest — the work written up is the shop's real
+        trade, and cash follows it in on its own schedule. Then what is at
+        risk, in the colours that mean risk. Payments and the rest are
+        context: true, worth having, never worth looking at before those two.
       */}
 
       {/* ── Today's trade ─────────────────────────────────────────── */}
@@ -227,15 +227,15 @@ export function Board({
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-emerald-600 bg-emerald-50 px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
-            Taken today
+        <div className="rounded-2xl border-2 border-slate-900 bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Sold this month
           </p>
-          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-emerald-700">
-            {money(s.revenueToday.amount)}
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+            {money(s.salesMonth.amount)}
           </p>
-          <p className="mt-1.5 text-sm font-medium text-emerald-700/80">
-            {s.revenueToday.count} payment{s.revenueToday.count === 1 ? "" : "s"} in
+          <p className="mt-1.5 text-sm font-medium text-slate-500">
+            {s.salesMonth.count} order{s.salesMonth.count === 1 ? "" : "s"} this month
           </p>
         </div>
 
@@ -317,8 +317,16 @@ export function Board({
           The rest of the picture
         </p>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-          <Small label="Sold this month" value={money(s.salesMonth.amount)} note={`${s.salesMonth.count} orders`} />
-          <Small label="Taken this month" value={money(s.revenueMonth.amount)} note={`${s.revenueMonth.count} payments`} />
+          <Small
+            label="Taken today"
+            value={money(s.revenueToday.amount)}
+            note={`${s.revenueToday.count} payment${s.revenueToday.count === 1 ? "" : "s"} in`}
+          />
+          <Small
+            label="Taken this month"
+            value={money(s.revenueMonth.amount)}
+            note={`${s.revenueMonth.count} payments`}
+          />
           <Small label="On the rack" value={String(s.onRack)} note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`} />
           <Small
             label="Turnaround"
