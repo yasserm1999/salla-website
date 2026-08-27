@@ -458,27 +458,33 @@ export function Board({
                             </span>
                           )}
                         </p>
-                        <ol className="space-y-1">
-                          {run.stops.map((o, i) => (
-                            /*
-                              Two lines on a phone, one on a desk.
+                        {/*
+                          A ruled list, not a paragraph of stops.
 
-                              This was a single wrapping row, which on a narrow
-                              screen broke wherever it happened to run out of
-                              width — a badge stranded on its own line, the
-                              time and the name split apart. The stop is now a
-                              block: who and when on top, what state it is in
-                              underneath, and the number down the side.
-                            */
-                            <li key={o.id} className="flex gap-2 text-sm">
-                              <span className="w-5 shrink-0 pt-0.5 text-xs font-bold text-violet-600">
+                          Run together with only a gap between them, three
+                          deliveries read as one long sentence — worse on a
+                          phone, where each stop takes two lines and the eye has
+                          nothing to tell it where one ends. Every stop now sits
+                          in its own ruled band, and the badges are the same
+                          ones used everywhere else rather than a squashed
+                          copy that happened to be typed here.
+                        */}
+                        <ol className="divide-y divide-[#f0e9df] overflow-hidden rounded-lg border border-[#ece7e1]">
+                          {run.stops.map((o, i) => (
+                            <li
+                              key={o.id}
+                              className="flex items-start gap-2.5 bg-white px-3 py-2.5 even:bg-[#fdfbf8]"
+                            >
+                              <span className="w-5 shrink-0 pt-1 text-xs font-bold text-violet-600">
                                 {i + 1}.
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-baseline gap-x-2">
-                                  <span className="font-black text-[#26364d]">
-                                    {o.dueTimeLabel?.replace(/\s*-\s*/, "–") ?? (
-                                      <span className="font-medium text-[#b8b1a8]">no time</span>
+                                  <span className="text-base font-black text-[#26364d]">
+                                    {o.dueTimeLabel?.replace(/s*-s*/, "–") ?? (
+                                      <span className="text-sm font-medium text-[#b8b1a8]">
+                                        no time
+                                      </span>
                                     )}
                                   </span>
                                   <span className="truncate font-medium text-[#26364d]">
@@ -486,31 +492,18 @@ export function Board({
                                   </span>
                                   <Tags customerID={o.customerID} orderID={o.id} />
                                 </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                  {o.cleaned ? (
-                                    <span className="rounded bg-emerald-600 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                      Ready
-                                    </span>
-                                  ) : (
-                                    <span className="rounded bg-amber-500 px-1.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                      Washing
-                                    </span>
-                                  )}
-                                  {o.rack && (
-                                    <span className="rounded border border-[#26364d] px-1.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
-                                      Rack {o.rack}
-                                    </span>
-                                  )}
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <StateBadges o={o} />
                                   {telOf(o) && (
                                     <a
-                                      href={`tel:${telOf(o)}`}
-                                      className="rounded border border-[#d8cbbd] px-1.5 text-xs font-semibold text-[#546d83]"
+                                      href={`tel:${telOf(o)!.replace(/[^d+]/g, "")}`}
+                                      className="rounded border border-[#d8cbbd] px-1.5 py-0.5 text-[11px] font-semibold text-[#546d83] hover:border-[#546d83]"
                                     >
                                       {telOf(o)}
                                     </a>
                                   )}
                                   {!o.paid && (
-                                    <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
+                                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
                                       collect {money(o.total)}
                                     </span>
                                   )}
