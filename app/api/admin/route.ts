@@ -28,7 +28,9 @@ export async function POST(req: Request) {
     );
   }
 
-  await startSession(username);
+  // The expiry is the only thing this changes; the cookie is signed either
+  // way, so asking to be remembered cannot be used to forge a longer session.
+  await startSession(username, body?.remember === true);
   return NextResponse.json({ success: true });
 }
 
