@@ -61,9 +61,9 @@ const BANDS: Record<
   later: {
     title: "Further out — everything else",
     blurb: "Taken in, with more than two days in hand.",
-    ring: "border-slate-200 bg-white",
-    chip: "bg-slate-200 text-slate-700",
-    bar: "bg-slate-300",
+    ring: "border-[#ece7e1] bg-white",
+    chip: "bg-[#e6dccf] text-[#546d83]",
+    bar: "bg-[#d8cbbd]",
   },
   ready: {
     title: "Sitting on the rack",
@@ -178,28 +178,28 @@ export function Board({
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-[#ece7e1] pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shop dashboard</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold tracking-tight text-[#26364d]">Shop dashboard</h1>
+          <p className="text-sm text-[#8a9099]">
             read{" "}
             {new Date(board.generatedAt).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
             })}
-            {looking && <span className="ml-2 text-slate-400">· fetching names…</span>}
+            {looking && <span className="ml-2 text-[#b8b1a8]">· fetching names…</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.refresh()}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-sky-500 hover:text-sky-700"
+            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
           >
             Refresh
           </button>
           <button
             onClick={signOut}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-[#8a9099] hover:text-[#3f4f61]"
           >
             Sign out ({admin})
           </button>
@@ -217,36 +217,36 @@ export function Board({
 
       {/* ── Today's trade ─────────────────────────────────────────── */}
       <section className="mb-3 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border-2 border-slate-900 bg-white px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Sold today</p>
-          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+        <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">Sold today</p>
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
             {money(s.salesToday.amount)}
           </p>
-          <p className="mt-1.5 text-sm font-medium text-slate-500">
+          <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
             {s.salesToday.count} order{s.salesToday.count === 1 ? "" : "s"} written today
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-slate-900 bg-white px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+        <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">
             Sold this month
           </p>
-          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
             {money(s.salesMonth.amount)}
           </p>
-          <p className="mt-1.5 text-sm font-medium text-slate-500">
+          <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
             {s.salesMonth.count} order{s.salesMonth.count === 1 ? "" : "s"} this month
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-slate-300 bg-white px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+        <div className="rounded-2xl border-2 border-[#d8cbbd] bg-white px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">
             Orders in today
           </p>
-          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-slate-900">
+          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
             {s.takenInToday}
           </p>
-          <p className="mt-1.5 text-sm font-medium text-slate-500">
+          <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
             {s.drivingToday} to be driven out
           </p>
         </div>
@@ -260,18 +260,18 @@ export function Board({
         the sales figure above was never the shop's to keep. The subtraction is
         shown rather than hidden so the net is auditable at a glance.
       */}
-      <section className="mb-6 rounded-2xl border-2 border-slate-900 bg-slate-900 px-5 py-4 text-white">
+      <section className="mb-6 rounded-2xl border-2 border-[#26364d] bg-[#26364d] px-5 py-4 text-white">
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           <div>
-            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-400">
+            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-[#b8b1a8]">
               Sold this month
             </p>
-            <p className="text-2xl font-bold tabular-nums text-slate-200">
+            <p className="text-2xl font-bold tabular-nums text-[#ece7e1]">
               {money(s.salesMonth.amount)}
             </p>
           </div>
 
-          <div className="pb-1 text-2xl font-light text-slate-500">−</div>
+          <div className="pb-1 text-2xl font-light text-[#8a9099]">−</div>
 
           <div>
             <p className="text-[0.68rem] font-bold uppercase tracking-widest text-rose-300">
@@ -282,7 +282,7 @@ export function Board({
             </p>
           </div>
 
-          <div className="pb-1 text-2xl font-light text-slate-500">=</div>
+          <div className="pb-1 text-2xl font-light text-[#8a9099]">=</div>
 
           <div>
             <p className="text-[0.68rem] font-bold uppercase tracking-widest text-emerald-300">
@@ -295,14 +295,14 @@ export function Board({
         </div>
 
         {s.carpetsMonth.lines.length > 0 ? (
-          <p className="mt-3 border-t border-slate-700 pt-2.5 text-xs text-slate-400">
+          <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
             {s.carpetsMonth.metres.toFixed(2)} m² out to the contractor ·{" "}
             {s.carpetsMonth.lines
               .map((l) => `${l.label} ${l.metres.toFixed(2)} m² = ${money(l.cost)}`)
               .join(" · ")}
           </p>
         ) : (
-          <p className="mt-3 border-t border-slate-700 pt-2.5 text-xs text-slate-400">
+          <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
             No carpets sold this month.
           </p>
         )}
@@ -340,27 +340,27 @@ export function Board({
 
         <div
           className={`rounded-2xl border-2 px-5 py-3.5 ${
-            s.dueToday > 0 ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white"
+            s.dueToday > 0 ? "border-amber-500 bg-amber-50" : "border-[#ece7e1] bg-white"
           }`}
         >
           <div className="flex items-baseline gap-3">
             <p
               className={`text-4xl font-black leading-none ${
-                s.dueToday > 0 ? "text-amber-700" : "text-slate-900"
+                s.dueToday > 0 ? "text-amber-700" : "text-[#26364d]"
               }`}
             >
               {s.dueToday}
             </p>
             <p
               className={`text-sm font-bold uppercase tracking-wider ${
-                s.dueToday > 0 ? "text-amber-700" : "text-slate-500"
+                s.dueToday > 0 ? "text-amber-700" : "text-[#8a9099]"
               }`}
             >
               Due today
             </p>
           </div>
           <p
-            className={`mt-1 text-xs ${s.dueToday > 0 ? "text-amber-700/80" : "text-slate-500"}`}
+            className={`mt-1 text-xs ${s.dueToday > 0 ? "text-amber-700/80" : "text-[#8a9099]"}`}
           >
             {s.dueToday > 0 ? "to finish before the hour promised" : "nothing left for today"}
           </p>
@@ -368,8 +368,8 @@ export function Board({
       </section>
 
       {/* ── Everything else, quietly ──────────────────────────────── */}
-      <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <p className="mb-2 text-[0.68rem] font-bold uppercase tracking-widest text-slate-400">
+      <section className="mb-6 rounded-xl border border-[#ece7e1] bg-[#f8f1e7] px-4 py-3">
+        <p className="mb-2 text-[0.68rem] font-bold uppercase tracking-widest text-[#b8b1a8]">
           The rest of the picture
         </p>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
@@ -416,8 +416,8 @@ export function Board({
                     {runs.map((run) => (
                       <div key={run.day} className="bg-white px-4 py-3">
                         <p className="mb-1.5 flex flex-wrap items-baseline gap-2">
-                          <span className="font-bold text-slate-900">{run.label}</span>
-                          <span className="text-sm text-slate-500">
+                          <span className="font-bold text-[#26364d]">{run.label}</span>
+                          <span className="text-sm text-[#8a9099]">
                             {run.stops.length} stop{run.stops.length === 1 ? "" : "s"} ·{" "}
                             {money(run.value)}
                           </span>
@@ -433,15 +433,15 @@ export function Board({
                               <span className="w-5 shrink-0 text-xs font-bold text-violet-600">
                                 {i + 1}.
                               </span>
-                              <span className="font-medium text-slate-900">{nameOf(o)}</span>
-                              <span className="text-xs text-slate-500">
+                              <span className="font-medium text-[#26364d]">{nameOf(o)}</span>
+                              <span className="text-xs text-[#8a9099]">
                                 {o.dueTimeLabel ?? "no time"}
                               </span>
                               <Tags customerID={o.customerID} orderID={o.id} />
                               {telOf(o) && (
                                 <a
                                   href={`tel:${telOf(o)}`}
-                                  className="rounded border border-slate-300 px-1.5 text-xs font-semibold text-slate-600"
+                                  className="rounded border border-[#d8cbbd] px-1.5 text-xs font-semibold text-[#546d83]"
                                 >
                                   {telOf(o)}
                                 </a>
@@ -489,11 +489,11 @@ export function Board({
                     {debts.rows.slice(0, 60).map((o) => (
                       <li key={o.id} className="flex flex-wrap items-center gap-x-3 px-4 py-2">
                         <span className="min-w-[10rem] flex-1">
-                          <span className="block text-sm font-semibold text-slate-900">
+                          <span className="block text-sm font-semibold text-[#26364d]">
                             {nameOf(o)}
                             <Tags customerID={o.customerID} orderID={o.id} />
                           </span>
-                          <span className="block truncate text-xs text-slate-500">
+                          <span className="block truncate text-xs text-[#8a9099]">
                             {o.summary || `${o.pieces} pieces`}
                             {o.rack && ` · rack ${o.rack}`}
                           </span>
@@ -511,7 +511,7 @@ export function Board({
                             {telOf(o)}
                           </a>
                         )}
-                        <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
+                        <span className="w-20 shrink-0 text-right text-sm font-bold text-[#26364d]">
                           {money(o.total)}
                         </span>
                       </li>
@@ -542,9 +542,9 @@ export function Board({
               {isOpen && (
                 <div className="border-t border-white/60 bg-white/70">
                   {rows.length === 0 ? (
-                    <p className="px-4 py-4 text-center text-sm text-slate-500">Nothing here.</p>
+                    <p className="px-4 py-4 text-center text-sm text-[#8a9099]">Nothing here.</p>
                   ) : (
-                    <ul className="divide-y divide-slate-100">
+                    <ul className="divide-y divide-[#f0e9df]">
                       {rows.slice(0, 80).map((o) => (
                         <li key={o.id}>
                           <button
@@ -553,7 +553,7 @@ export function Board({
                           >
                             <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
                             <span className="min-w-[11rem] flex-1">
-                              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                              <span className="flex items-center gap-1.5 text-sm font-semibold text-[#26364d]">
                                 {nameOf(o)}
                                 {o.isDelivery && (
                                   <span
@@ -565,12 +565,12 @@ export function Board({
                                 )}
                                 <Tags customerID={o.customerID} orderID={o.id} />
                               </span>
-                              <span className="block truncate text-xs text-slate-500">
+                              <span className="block truncate text-xs text-[#8a9099]">
                                 {o.summary || `${o.pieces} pieces`}
                                 {o.rack && ` · rack ${o.rack}`}
                               </span>
                             </span>
-                            <span className="shrink-0 text-sm font-bold text-slate-800">
+                            <span className="shrink-0 text-sm font-bold text-[#3f4f61]">
                               {whenLabel(o)}
                             </span>
                             {key === "ready" && o.daysOnRack !== null && (
@@ -583,7 +583,7 @@ export function Board({
                                 unpaid
                               </span>
                             )}
-                            <span className="w-20 shrink-0 text-right text-sm font-bold text-slate-900">
+                            <span className="w-20 shrink-0 text-right text-sm font-bold text-[#26364d]">
                               {money(o.total)}
                             </span>
                           </button>
@@ -593,7 +593,7 @@ export function Board({
                     </ul>
                   )}
                   {rows.length > 80 && (
-                    <p className="px-4 py-2 text-xs text-slate-500">Showing 80 of {rows.length}.</p>
+                    <p className="px-4 py-2 text-xs text-[#8a9099]">Showing 80 of {rows.length}.</p>
                   )}
                 </div>
               )}
@@ -602,7 +602,7 @@ export function Board({
         })}
       </div>
 
-      <p className="mt-6 text-xs text-slate-400">
+      <p className="mt-6 text-xs text-[#b8b1a8]">
         Orders taken in between {board.windowFrom} and {board.windowTo}, read live from
         CleanCloud each time this page loads. Dates and hours are the shop&rsquo;s own —
         Oman time, not the server&rsquo;s.
@@ -621,8 +621,8 @@ export function Board({
 function Tags({ customerID, orderID }: { customerID: string; orderID: string }) {
   return (
     <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
-      <span className="rounded bg-slate-100 px-1 text-slate-600">c{customerID}</span>
-      <span className="text-slate-400">#{orderID}</span>
+      <span className="rounded bg-[#f0e9df] px-1 text-[#546d83]">c{customerID}</span>
+      <span className="text-[#b8b1a8]">#{orderID}</span>
     </span>
   );
 }
@@ -653,12 +653,12 @@ function Header({
         {count}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-bold text-slate-900">{title}</span>
-        <span className="block text-xs text-slate-600">{blurb}</span>
+        <span className="block font-bold text-[#26364d]">{title}</span>
+        <span className="block text-xs text-[#546d83]">{blurb}</span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-sm font-bold text-slate-900">{money(value)}</span>
-        <span className="text-xs text-slate-500">{isOpen ? "hide" : "show"}</span>
+        <span className="block text-sm font-bold text-[#26364d]">{money(value)}</span>
+        <span className="text-xs text-[#8a9099]">{isOpen ? "hide" : "show"}</span>
       </span>
     </button>
   );
@@ -681,12 +681,12 @@ function Detail({ o, name, tel }: { o: Assessed; name: string; tel: string | nul
   if (o.notes) rows.push(["Notes", o.notes]);
 
   return (
-    <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
+    <div className="border-t border-[#f0e9df] bg-[#f8f1e7] px-4 py-3">
       <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         {rows.map(([k, v]) => (
           <div key={k} className="flex gap-2">
-            <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-slate-400">{k}</dt>
-            <dd className="min-w-0 flex-1 text-slate-800">{v}</dd>
+            <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-[#b8b1a8]">{k}</dt>
+            <dd className="min-w-0 flex-1 text-[#3f4f61]">{v}</dd>
           </div>
         ))}
       </dl>
@@ -708,11 +708,11 @@ function Detail({ o, name, tel }: { o: Assessed; name: string; tel: string | nul
 function Small({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <div>
-      <dt className="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-400">
+      <dt className="text-[0.68rem] font-semibold uppercase tracking-wider text-[#b8b1a8]">
         {label}
       </dt>
-      <dd className="text-lg font-bold leading-tight text-slate-800">{value}</dd>
-      <dd className="text-[0.7rem] text-slate-500">{note}</dd>
+      <dd className="text-lg font-bold leading-tight text-[#3f4f61]">{value}</dd>
+      <dd className="text-[0.7rem] text-[#8a9099]">{note}</dd>
     </div>
   );
 }

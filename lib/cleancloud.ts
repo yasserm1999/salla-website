@@ -177,7 +177,7 @@ async function post(endpoint: string, body: Record<string, unknown>) {
 
   let lastError = "";
   // The host drops a connection now and then; one timeout is not an answer.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       return await inTurn(async () => {
         const res = await fetch(`${API}/${endpoint}`, {
@@ -195,7 +195,14 @@ async function post(endpoint: string, body: Record<string, unknown>) {
       // by being asked again. Only slow down and try once more.
       if (e instanceof CleanCloudError && !isRateLimit(e)) throw e;
       lastError = e instanceof Error ? e.message : String(e);
-      await new Promise((r) => setTimeout(r, (isRateLimit(e) ? 500 : 1200) * (attempt + 1)));
+
+      /*
+        Doubling, with a random slice on top. The randomness matters: several
+        page loads refused in the same second would otherwise all wait exactly
+        500ms and collide again on the retry, and again after that.
+      */
+      const base = isRateLimit(e) ? 300 * 2 ** attempt : 1200 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, base + Math.random() * 400));
     }
   }
   throw new CleanCloudError(`CleanCloud did not answer: ${lastError}`);
@@ -208,9 +215,35 @@ async function post(endpoint: string, body: Record<string, unknown>) {
  * "Filter" that does not appear to exist. A date range does, and is the only
  * way to see the whole shop rather than one customer at a time.
  */
+/*
+  A short memory of what was just asked for.
+
+  Reloading the dashboard twice in ten seconds cannot show anything new — the
+  shop does not change that fast — but it does spend the per-second budget
+  twice. Answers are kept for a few seconds so a refresh, or two people looking
+  at once on the same instance, costs one request rather than several.
+*/
+const RECENT_TTL_MS = 15_000;
+const recent = new Map<string, { at: number; value: unknown }>();
+
+async function remembered<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const hit = recent.get(key);
+  if (hit && Date.now() - hit.at < RECENT_TTL_MS) return hit.value as T;
+  const value = await work();
+  recent.set(key, { at: Date.now(), value });
+  // The map is keyed by date range, so it cannot grow without bound in a day,
+  // but there is no reason to carry yesterday's around either.
+  if (recent.size > 40) {
+    for (const [k, v] of recent) if (Date.now() - v.at > RECENT_TTL_MS) recent.delete(k);
+  }
+  return value;
+}
+
 export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Order[]> {
-  const data = await post("getOrders", { dateFrom, dateTo });
-  return (Array.isArray(data?.Orders) ? data.Orders : []).map(toOrder);
+  return remembered(`orders:${dateFrom}:${dateTo}`, async () => {
+    const data = await post("getOrders", { dateFrom, dateTo });
+    return (Array.isArray(data?.Orders) ? data.Orders : []).map(toOrder);
+  });
 }
 
 /**
@@ -675,13 +708,15 @@ export async function fetchTakings(dateFrom: string, dateTo: string): Promise<Mo
     day after the last day wanted is what has to be sent.
   */
   const dayAfter = shopYmd(new Date(Date.parse(`${dateTo}T00:00:00Z`) + DAY));
-  const data = await post("getPayments", { dateFrom, dateTo: dayAfter });
-  const list: unknown[] = Array.isArray(data?.payments) ? data.payments : [];
-  const amount = list.reduce<number>(
-    (s, p) => s + Number((p as { amount?: unknown })?.amount ?? 0),
-    0
-  );
-  return { amount, count: list.length };
+  return remembered(`takings:${dateFrom}:${dateTo}`, async () => {
+    const data = await post("getPayments", { dateFrom, dateTo: dayAfter });
+    const list: unknown[] = Array.isArray(data?.payments) ? data.payments : [];
+    const amount = list.reduce<number>(
+      (sum, p) => sum + Number((p as { amount?: unknown })?.amount ?? 0),
+      0
+    );
+    return { amount, count: list.length };
+  });
 }
 
 export type Summary = {
