@@ -636,7 +636,101 @@ export type Summary = {
   averageTurnaroundDays: number | null;
   /** How far past its promise the worst unwashed order is; 0 means due earlier today. */
   worstDaysLate: number;
+  /*
+    Carpets go out to a contractor, so part of what was sold is already spoken
+    for. Both the bill and the sales figure net of it are kept, because the
+    gross is what was traded and the net is what the shop actually earned.
+  */
+  carpetsToday: CarpetBill;
+  carpetsMonth: CarpetBill;
+  netSalesToday: number;
+  netSalesMonth: number;
 };
+
+
+/*
+  Carpets are the one job the shop does not do itself.
+
+  They go out to a contractor who bills by the square metre, so every metre
+  sold carries a cost the sales figure does not show. CleanCloud has no notion
+  of that cost — it only knows what the customer was charged — so the two rates
+  are kept side by side here, and the contractor's half has to be edited by
+  hand whenever the deal changes.
+
+  Metres arrive as quantity: a 4.3 m rug is written up as 4.3 "pieces" of the
+  per-metre product, which is why the numbers come out fractional.
+*/
+const CARPETS: { match: RegExp; label: string; charge: number; cost: number }[] = [
+  { match: /^machine made carpets/i, label: "Machine made", charge: 1.8, cost: 1.0 },
+  { match: /^hand tufted carpets/i, label: "Hand-tufted", charge: 3.3, cost: 2.0 },
+  { match: /^handmade carpets \(wool/i, label: "Handmade wool", charge: 5.5, cost: 3.5 },
+  { match: /^handmade carpets \(silk/i, label: "Handmade silk", charge: 6.5, cost: 4.0 },
+];
+
+export type CarpetLine = {
+  label: string;
+  metres: number;
+  /** What the customer was billed for those metres. */
+  charged: number;
+  /** What the contractor is owed for them. */
+  cost: number;
+  orders: number;
+};
+
+export type CarpetBill = {
+  metres: number;
+  charged: number;
+  cost: number;
+  /** Only the kinds that actually appeared, so an empty month shows nothing. */
+  lines: CarpetLine[];
+};
+
+/**
+ * What the contractor is owed for a set of orders.
+ *
+ * Read off the item summary rather than a product list, because that is the
+ * only place CleanCloud puts quantities. A line it cannot parse is left out
+ * rather than guessed at — a wrong bill is worse than a short one.
+ */
+export function buildCarpetBill(orders: Order[]): CarpetBill {
+  const seen = new Map<string, CarpetLine & { ids: Set<string> }>();
+
+  for (const order of orders) {
+    // tidy() has already turned CleanCloud's <br> separators into " · ".
+    for (const part of (order.summary ?? "").split(" · ")) {
+      const line = part.trim();
+      if (!line) continue;
+      const parsed = line.match(/^(.*?)\s+x\s+([\d.]+)$/i);
+      if (!parsed) continue;
+
+      const kind = CARPETS.find((c) => c.match.test(parsed[1].trim()));
+      if (!kind) continue;
+
+      const metres = Number(parsed[2]);
+      if (!Number.isFinite(metres) || metres <= 0) continue;
+
+      const row =
+        seen.get(kind.label) ??
+        { label: kind.label, metres: 0, charged: 0, cost: 0, orders: 0, ids: new Set<string>() };
+      row.metres += metres;
+      row.charged += metres * kind.charge;
+      row.cost += metres * kind.cost;
+      row.ids.add(order.id);
+      seen.set(kind.label, row);
+    }
+  }
+
+  const lines = CARPETS.map((c) => seen.get(c.label))
+    .filter((r): r is CarpetLine & { ids: Set<string> } => r !== undefined)
+    .map(({ ids, ...row }) => ({ ...row, orders: ids.size }));
+
+  return {
+    metres: lines.reduce((t, l) => t + l.metres, 0),
+    charged: lines.reduce((t, l) => t + l.charged, 0),
+    cost: lines.reduce((t, l) => t + l.cost, 0),
+    lines,
+  };
+}
 
 export function buildSummary(
   orders: Order[],
@@ -681,9 +775,18 @@ export function buildSummary(
     0
   );
 
+  const carpetsToday = buildCarpetBill(writtenToday);
+  const carpetsMonth = buildCarpetBill(writtenThisMonth);
+  const soldToday = writtenToday.reduce((sum, o) => sum + o.total, 0);
+  const soldMonth = writtenThisMonth.reduce((sum, o) => sum + o.total, 0);
+
   return {
     late: board.totals.late,
     worstDaysLate,
+    carpetsToday,
+    carpetsMonth,
+    netSalesToday: soldToday - carpetsToday.cost,
+    netSalesMonth: soldMonth - carpetsMonth.cost,
     dueToday: board.totals.dueToday,
     drivingToday: todayRun?.stops.length ?? 0,
     takenInToday,

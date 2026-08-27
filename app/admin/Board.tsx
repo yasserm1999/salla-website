@@ -252,6 +252,62 @@ export function Board({
         </div>
       </section>
 
+
+      {/*
+        What the month leaves behind.
+
+        Carpets are sold by the shop but washed by somebody else, so part of
+        the sales figure above was never the shop's to keep. The subtraction is
+        shown rather than hidden so the net is auditable at a glance.
+      */}
+      <section className="mb-6 rounded-2xl border-2 border-slate-900 bg-slate-900 px-5 py-4 text-white">
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-400">
+              Sold this month
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-slate-200">
+              {money(s.salesMonth.amount)}
+            </p>
+          </div>
+
+          <div className="pb-1 text-2xl font-light text-slate-500">−</div>
+
+          <div>
+            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-rose-300">
+              Carpet contractor
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-rose-300">
+              {money(s.carpetsMonth.cost)}
+            </p>
+          </div>
+
+          <div className="pb-1 text-2xl font-light text-slate-500">=</div>
+
+          <div>
+            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-emerald-300">
+              Net to the shop
+            </p>
+            <p className="text-4xl font-black tabular-nums leading-none text-emerald-300">
+              {money(s.netSalesMonth)}
+            </p>
+          </div>
+        </div>
+
+        {s.carpetsMonth.lines.length > 0 ? (
+          <p className="mt-3 border-t border-slate-700 pt-2.5 text-xs text-slate-400">
+            {s.carpetsMonth.metres.toFixed(2)} m² out to the contractor ·{" "}
+            {s.carpetsMonth.lines
+              .map((l) => `${l.label} ${l.metres.toFixed(2)} m² = ${money(l.cost)}`)
+              .join(" · ")}
+          </p>
+        ) : (
+          <p className="mt-3 border-t border-slate-700 pt-2.5 text-xs text-slate-400">
+            No carpets sold this month.
+          </p>
+        )}
+      </section>
+
       {/* ── What is at risk ───────────────────────────────────────── */}
       <section className="mb-6 grid gap-3 sm:grid-cols-2">
         <div
