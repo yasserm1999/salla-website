@@ -43,6 +43,9 @@ export type Order = {
   /** As the shop writes it: "5pm", "7pm-8pm". */
   dueTimeLabel: string | null;
   rack: string | null;
+  /** Where the van goes. Written on the order at the time, so it survives the
+      customer later changing theirs. Blank on plenty of them. */
+  address: string | null;
   notes: string | null;
   summary: string | null;
   /** True when the shop drives it to them rather than the customer coming. */
@@ -116,6 +119,7 @@ function toOrder(raw: Record<string, unknown>): Order {
     dueAt: at(raw.deliveryDate),
     dueTimeLabel: time && time !== "0" && time !== "0-0" ? time : null,
     rack: s("rack") && s("rack") !== "0" ? s("rack") : null,
+    address: tidy(s("address")),
     notes: tidy(s("notes")),
     // CleanCloud writes the item list with HTML line breaks in it.
     summary: tidy(s("summary")),
@@ -198,6 +202,20 @@ const CACHE_TTL = 12 * 60 * 60 * 1000;
  * caller treats any Error as final, which is right for a bad request and
  * wrong for this, so this one waits and asks again.
  */
+/**
+ * CleanCloud keeps a second, structured copy of the address. It is only worth
+ * reading when the plain one is empty, and only the parts that locate a door.
+ */
+function detailedAddress(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  const part = (k: string) => (typeof d[k] === "string" && d[k].trim() ? String(d[k]).trim() : null);
+  const bits = ["buildingName", "block", "house", "floor", "unit", "street", "avenue", "city"]
+    .map(part)
+    .filter(Boolean);
+  return bits.length ? [...new Set(bits)].join(", ") : null;
+}
+
 async function lookupCustomer(id: string): Promise<Record<string, unknown>> {
   let last: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -241,7 +259,7 @@ export async function fetchCustomers(ids: string[]): Promise<Map<string, Custome
       const brief: CustomerBrief = {
         name: text(c?.Name),
         tel: text(c?.Tel),
-        place: text(c?.addressDetailed) ?? text(c?.Address) ?? null,
+        place: tidyAddress(text(c?.Address)) ?? detailedAddress(c?.addressDetailed),
       };
       if (brief.name || brief.tel) {
         customerCache.set(id, { brief, at: now });
@@ -504,6 +522,15 @@ export type Run = {
  * Only orders still in the shop appear. Once delivered, CleanCloud marks them
  * collected like any other, and they are somebody else's memory.
  */
+/** "Adam Building 504 // Adam Building 504" is one address, said twice. */
+export function tidyAddress(raw: string | null): string | null {
+  if (!raw) return null;
+  const halves = raw.split("//").map((h) => h.trim()).filter(Boolean);
+  const unique = [...new Set(halves)];
+  const joined = unique.join(", ").trim();
+  return joined || null;
+}
+
 export function buildRuns(orders: Order[], now = new Date()): Run[] {
   const today = shopYmd(now);
   const tomorrow = shopYmd(new Date(now.getTime() + DAY));

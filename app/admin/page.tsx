@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentAdmin } from "@/lib/admin-session";
+import { currentStaff } from "@/lib/admin-session";
 import {
   fetchOrders,
   buildBoard,
@@ -13,6 +13,7 @@ import {
   CleanCloudError,
 } from "@/lib/cleancloud";
 import { Board } from "./Board";
+import { Driver } from "./Driver";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Salla — shop dashboard" };
@@ -26,15 +27,23 @@ export const metadata = { title: "Salla — shop dashboard" };
  * cleaned — and beside it, the ones a driver has to take out.
  */
 export default async function AdminPage() {
-  const admin = await currentAdmin();
-  if (!admin) redirect("/admin/login");
+  const staff = await currentStaff();
+  if (!staff) redirect("/admin/login");
 
   const { from, to } = defaultWindow();
 
   try {
     const orders = await fetchOrders(from, to);
-    const board = buildBoard(orders);
     const runs = buildRuns(orders);
+
+    /*
+      A driver's page stops here. The rest of this function reads takings and
+      builds the debt list, and none of that should travel to a phone in a van
+      — so it is not merely hidden from them, it is never fetched.
+    */
+    if (staff.role === "driver") return <Driver runs={runs} driver={staff.name} />;
+
+    const board = buildBoard(orders);
     const debts = buildDebts(orders);
 
     // Money is read from payments, so the two ranges are asked for separately.
@@ -64,7 +73,7 @@ export default async function AdminPage() {
         runs={runs}
         debts={debts}
         summary={summary}
-        admin={admin}
+        admin={staff.name}
       />
     );
   } catch (e) {

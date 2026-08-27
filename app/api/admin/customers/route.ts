@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   const found = await fetchCustomers(ids);
   return NextResponse.json({
     people: Object.fromEntries(
-      [...found.entries()].map(([id, b]) => [id, { name: b.name, tel: b.tel }])
+      [...found.entries()].map(([id, b]) => [id, { name: b.name, tel: b.tel, place: b.place }])
     ),
   });
 }
