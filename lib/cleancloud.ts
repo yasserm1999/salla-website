@@ -85,6 +85,21 @@ function tidy(value: string | null): string | null {
   return text || null;
 }
 
+/**
+ * When a promise actually falls due.
+ *
+ * "5pm" is 17:00. "7pm-8pm" is 20:00 — a window is not broken until it has
+ * closed, so the end of it is the deadline. Used to decide lateness within
+ * today, which day-level arithmetic cannot see: at 11:43, an order promised
+ * for 11am is late, and calling it "due today" hides the one thing worth
+ * knowing about it.
+ */
+export function dueWindowEnd(label: string | null): number | null {
+  if (!label) return null;
+  const parts = label.split(/[-–]/);
+  return dueMinutes(parts.length > 1 ? parts[parts.length - 1] : parts[0]);
+}
+
 function toOrder(raw: Record<string, unknown>): Order {
   const s = (k: string) => (raw[k] == null ? null : String(raw[k]));
   const time = s("deliveryTime");
@@ -291,6 +306,18 @@ export function shopYmd(d: Date): string {
   return shopDateFormat.format(d);
 }
 
+/** The time of day in the shop, in minutes since midnight. */
+function shopMinutesNow(now: Date): number {
+  const hhmm = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SHOP_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
 /** Midnight in the shop, as a number that can be subtracted. */
 const startOfDay = (d: Date) => Date.parse(`${shopYmd(d)}T00:00:00Z`);
 
@@ -331,7 +358,14 @@ export function assess(order: Order, now = new Date()): Assessed {
   } else if (daysUntilDue < 0) {
     urgency = "late";
   } else if (daysUntilDue === 0) {
-    urgency = "today";
+    /*
+      Today is not one thing. An order promised for 11am is late at 11:43 and
+      perfectly fine at 09:00, and the difference is the whole point of the
+      band. A window like "7pm-8pm" is judged on its end: it is not broken
+      until it has closed.
+    */
+    const deadline = dueWindowEnd(order.dueTimeLabel);
+    urgency = deadline !== null && shopMinutesNow(now) > deadline ? "late" : "today";
   } else if (daysUntilDue === 1) {
     urgency = "tomorrow";
   } else if (daysUntilDue === 2) {
@@ -588,6 +622,14 @@ export type Summary = {
   onRack: number;
   onRackValue: number;
   unpaidOnRack: number;
+  /*
+    Sales and takings are different questions and a laundry needs both. Sales
+    is what was written up — the work promised. Takings is what actually
+    arrived in the till, which for a shop paid on collection lags behind it by
+    days. Showing only one of them hides either the work or the cash.
+  */
+  salesToday: Money;
+  salesMonth: Money;
   revenueToday: Money;
   revenueMonth: Money;
   /** Days from taking it in to having it washed, over the last month. */
@@ -604,7 +646,12 @@ export function buildSummary(
 ): Summary {
   const today = shopYmd(now);
 
-  const takenInToday = orders.filter((o) => o.createdAt && shopYmd(o.createdAt) === today).length;
+  const writtenToday = orders.filter((o) => o.createdAt && shopYmd(o.createdAt) === today);
+  const thisMonth = shopYmd(now).slice(0, 7);
+  const writtenThisMonth = orders.filter(
+    (o) => o.createdAt && shopYmd(o.createdAt).slice(0, 7) === thisMonth
+  );
+  const takenInToday = writtenToday.length;
 
   /*
     Turnaround is measured on work finished in the last month, not on
@@ -628,6 +675,14 @@ export function buildSummary(
     dueToday: board.totals.dueToday,
     drivingToday: todayRun?.stops.length ?? 0,
     takenInToday,
+    salesToday: {
+      amount: writtenToday.reduce((sum, o) => sum + o.total, 0),
+      count: writtenToday.length,
+    },
+    salesMonth: {
+      amount: writtenThisMonth.reduce((sum, o) => sum + o.total, 0),
+      count: writtenThisMonth.length,
+    },
     onRack: board.totals.ready,
     onRackValue: board.totals.valueReady,
     unpaidOnRack: board.totals.unpaidReady,

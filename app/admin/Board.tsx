@@ -81,6 +81,10 @@ const money = (n: number) =>
 function whenLabel(o: Assessed): string {
   const time = o.dueTimeLabel ? ` ${o.dueTimeLabel}` : "";
   if (o.daysUntilDue === null) return "no promised date";
+  // Promised for earlier today and the hour has gone by.
+  if (o.daysUntilDue === 0 && o.urgency === "late") {
+    return `overdue — was due${time || " earlier today"}`;
+  }
   if (o.daysUntilDue < 0) {
     const d = Math.abs(o.daysUntilDue);
     return `${d} day${d === 1 ? "" : "s"} late${time ? ` · was due${time}` : ""}`;
@@ -208,8 +212,30 @@ export function Board({
         <Stat label="Due today" value={s.dueToday} tone={s.dueToday > 0 ? "warn" : "plain"} note="to finish before closing" />
         <Stat label="Taken in today" value={s.takenInToday} tone="plain" note="new orders" />
         <Stat label="Driving today" value={s.drivingToday} tone={s.drivingToday > 0 ? "warn" : "plain"} note="stops on the van" />
-        <Stat label="Today's takings" value={money(s.revenueToday.amount)} tone="good" note={`${s.revenueToday.count} payments`} />
-        <Stat label="This month" value={money(s.revenueMonth.amount)} tone="good" note={`${s.revenueMonth.count} payments`} />
+        <Stat
+          label="Sold today"
+          value={money(s.salesToday.amount)}
+          tone="plain"
+          note={`${s.salesToday.count} orders written`}
+        />
+        <Stat
+          label="Taken today"
+          value={money(s.revenueToday.amount)}
+          tone="good"
+          note={`${s.revenueToday.count} payments in`}
+        />
+        <Stat
+          label="Sold this month"
+          value={money(s.salesMonth.amount)}
+          tone="plain"
+          note={`${s.salesMonth.count} orders written`}
+        />
+        <Stat
+          label="Taken this month"
+          value={money(s.revenueMonth.amount)}
+          tone="good"
+          note={`${s.revenueMonth.count} payments in`}
+        />
         <Stat label="On the rack" value={s.onRack} tone="plain" note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`} />
         <Stat
           label="Turnaround"
@@ -262,8 +288,9 @@ export function Board({
                               </span>
                               <span className="font-medium text-slate-900">{nameOf(o)}</span>
                               <span className="text-xs text-slate-500">
-                                {o.dueTimeLabel ?? "no time"} · #{o.id}
+                                {o.dueTimeLabel ?? "no time"}
                               </span>
+                              <Tags customerID={o.customerID} orderID={o.id} />
                               {telOf(o) && (
                                 <a
                                   href={`tel:${telOf(o)}`}
@@ -317,9 +344,7 @@ export function Board({
                         <span className="min-w-[10rem] flex-1">
                           <span className="block text-sm font-semibold text-slate-900">
                             {nameOf(o)}
-                            <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-                              #{o.id}
-                            </span>
+                            <Tags customerID={o.customerID} orderID={o.id} />
                           </span>
                           <span className="block truncate text-xs text-slate-500">
                             {o.summary || `${o.pieces} pieces`}
@@ -391,9 +416,7 @@ export function Board({
                                     VAN
                                   </span>
                                 )}
-                                <span className="font-mono text-xs font-normal text-slate-400">
-                                  #{o.id}
-                                </span>
+                                <Tags customerID={o.customerID} orderID={o.id} />
                               </span>
                               <span className="block truncate text-xs text-slate-500">
                                 {o.summary || `${o.pieces} pieces`}
@@ -438,6 +461,22 @@ export function Board({
         Oman time, not the server&rsquo;s.
       </p>
     </main>
+  );
+}
+
+/**
+ * The two numbers that identify a row.
+ *
+ * The customer number first, because names repeat and the shop recognises
+ * some people by their number; the order number after it, smaller, since it
+ * is what CleanCloud calls the job rather than what anybody says out loud.
+ */
+function Tags({ customerID, orderID }: { customerID: string; orderID: string }) {
+  return (
+    <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
+      <span className="rounded bg-slate-100 px-1 text-slate-600">c{customerID}</span>
+      <span className="text-slate-400">#{orderID}</span>
+    </span>
   );
 }
 
