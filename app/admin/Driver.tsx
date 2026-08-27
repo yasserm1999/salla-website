@@ -205,6 +205,15 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
         )}
       </div>
 
+      {stop.summary && (
+        <p className="mt-2 rounded-lg border border-[#ece7e1] bg-[#f8f1e7] px-3 py-2 text-sm leading-snug text-[#3f4f61]">
+          <span className="mr-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-[#b8b1a8]">
+            In the bag
+          </span>
+          {stop.summary}
+        </p>
+      )}
+
       {place ? (
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`}
