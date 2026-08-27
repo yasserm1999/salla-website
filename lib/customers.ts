@@ -64,10 +64,22 @@ const LAPSE_MULTIPLE = 3;
 
 const DAY = 86_400_000;
 
+/**
+ * The shop's own accounts, kept out of the customer book.
+ *
+ * Customer 1 is the owner, and the account carries test orders. Left in, it
+ * ranked first by spend and was flagged as a lapsed customer worth chasing —
+ * which would be the shop ringing itself. The orders stay in the sales and
+ * delivery figures, because the money and the work were real; they are only
+ * excluded from questions about who the customers are.
+ */
+export const SHOP_OWN_ACCOUNTS = new Set(["1"]);
+
 export function buildCustomers(orders: Order[], now = new Date()): CustomerRecord[] {
   const byCustomer = new Map<string, Order[]>();
   for (const order of orders) {
     if (!order.customerID || !order.createdAt) continue;
+    if (SHOP_OWN_ACCOUNTS.has(order.customerID)) continue;
     const list = byCustomer.get(order.customerID) ?? [];
     list.push(order);
     byCustomer.set(order.customerID, list);
