@@ -574,10 +574,29 @@ export function Board({
                               </span>
                               <span className="block truncate text-xs text-[#8a9099]">
                                 {o.summary || `${o.pieces} pieces`}
-                                {o.rack && ` · rack ${o.rack}`}
                               </span>
                             </span>
-                            <span className="shrink-0 text-sm font-bold text-[#3f4f61]">
+                            <span className="flex shrink-0 items-center gap-1">
+                              {o.status === "2" ? (
+                                <span className="rounded bg-[#ece7e1] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#8a9099]">
+                                  Collected
+                                </span>
+                              ) : o.cleaned ? (
+                                <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                  Ready
+                                </span>
+                              ) : (
+                                <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                  Washing
+                                </span>
+                              )}
+                              {o.rack && (
+                                <span className="rounded border border-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
+                                  Rack {o.rack}
+                                </span>
+                              )}
+                            </span>
+                            <span className="shrink-0 text-sm font-black text-[#26364d]">
                               {whenLabel(o)}
                             </span>
                             {key === "ready" && o.daysOnRack !== null && (
@@ -629,7 +648,7 @@ function Tags({ customerID, orderID }: { customerID: string; orderID: string }) 
   return (
     <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
       <span className="rounded bg-[#f0e9df] px-1 text-[#546d83]">c{customerID}</span>
-      <span className="text-[#b8b1a8]">#{orderID}</span>
+      <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">#{orderID}</span>
     </span>
   );
 }

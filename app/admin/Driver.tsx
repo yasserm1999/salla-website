@@ -22,6 +22,9 @@ type Person = { name: string | null; tel: string | null; place: string | null };
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "7pm-8pm" as it should be read: with a proper dash, and no shouting. */
+const window = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
+
 export function Driver({ runs, driver }: { runs: Run[]; driver: string }) {
   const router = useRouter();
   const [people, setPeople] = useState<Record<string, Person>>({});
@@ -156,12 +159,18 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-lg font-bold leading-tight text-[#26364d]">{name}</p>
-          <p className="text-xs text-[#8a9099]">
-            #{stop.id}
-            {stop.dueTimeLabel && <span className="font-semibold"> · {stop.dueTimeLabel}</span>}
-            {stop.pieces > 0 && <span> · {stop.pieces} pcs</span>}
+          <p className="flex flex-wrap items-baseline gap-x-2.5">
+            <span className="rounded-lg bg-[#26364d] px-2.5 py-1 text-2xl font-black leading-none tracking-tight text-white">
+              #{stop.id}
+            </span>
+            <span className="text-2xl font-black leading-none tracking-tight text-[#26364d]">
+              {window(stop.dueTimeLabel) ?? (
+                <span className="text-base text-[#b8b1a8]">no time set</span>
+              )}
+            </span>
           </p>
+          <p className="mt-1.5 truncate text-lg font-bold leading-tight text-[#26364d]">{name}</p>
+          {stop.pieces > 0 && <p className="text-xs text-[#8a9099]">{stop.pieces} pcs</p>}
         </div>
         {owes ? (
           <div className="shrink-0 rounded-lg bg-red-600 px-2.5 py-1.5 text-center text-white">
@@ -171,6 +180,27 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
         ) : (
           <span className="shrink-0 rounded-lg bg-emerald-100 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700">
             Paid
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2.5 flex flex-wrap items-stretch gap-2">
+        {stop.cleaned ? (
+          <span className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-black uppercase tracking-wider text-white">
+            Ready
+          </span>
+        ) : (
+          <span className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-black uppercase tracking-wider text-white">
+            Not ready
+          </span>
+        )}
+        {stop.rack ? (
+          <span className="rounded-lg border-2 border-[#26364d] px-3 py-1.5 text-sm font-black uppercase tracking-wider text-[#26364d]">
+            Rack {stop.rack}
+          </span>
+        ) : (
+          <span className="rounded-lg border-2 border-dashed border-[#d8cbbd] px-3 py-1.5 text-sm font-semibold uppercase tracking-wider text-[#b8b1a8]">
+            No rack
           </span>
         )}
       </div>
@@ -193,7 +223,9 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
       {stop.notes && <p className="mt-1.5 text-xs text-[#546d83]">Note: {stop.notes}</p>}
 
       {!stop.cleaned && (
-        <p className="mt-1.5 text-xs font-semibold text-amber-800">Not washed yet — do not load.</p>
+        <p className="mt-1.5 text-xs font-semibold text-amber-800">
+          Still being washed — do not load this one.
+        </p>
       )}
 
       {tel && (
