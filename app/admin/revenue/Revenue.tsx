@@ -54,6 +54,7 @@ export function Revenue({
     );
   }
 
+  const previous = periods.length > 1 ? periods[periods.length - 2] : null;
   const everyDay = periods.flatMap((p) => p.days);
   const lifetime = periods.reduce((s, p) => s + p.net, 0);
   const lifetimeOrders = periods.reduce((s, p) => s + p.orders, 0);
@@ -76,24 +77,59 @@ export function Revenue({
 
       {/* ── The whole life of the shop, in one line ────────────────── */}
       <section className="mb-7 overflow-hidden rounded-2xl bg-[#26364d] text-white">
-        <div className="flex flex-wrap items-end justify-between gap-4 px-5 pb-4 pt-5">
+        {/*
+          The two figures a shopkeeper actually wants side by side: where this
+          month stands, and what the last one came to. The lifetime total is
+          still here, but under the bars — it is the story the chart already
+          tells, and it is not a number anyone acts on.
+        */}
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 px-5 pb-4 pt-5">
           <div>
             <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-[#d8b98a]">
-              Earned since opening
+              {current.label} to date
             </p>
             <p className="mt-1 text-5xl font-black leading-none tracking-tight">
-              {money(lifetime)}
+              {money(current.net)}
             </p>
             <p className="mt-1.5 text-sm text-[#b6c0cc]">
-              9 July to today · {lifetimeOrders} customer orders over {tradedDays} trading days
+              {current.calendarDays} day{current.calendarDays === 1 ? "" : "s"} in ·{" "}
+              {current.orders} orders · {money(current.dailyAverage)} a day
             </p>
           </div>
-          <div className="flex gap-6">
-            <Perched label="A trading day" value={money(lifetime / Math.max(1, tradedDays))} />
-            <Perched label="An order" value={money(lifetime / Math.max(1, lifetimeOrders))} />
-          </div>
+
+          {previous && (
+            <div className="sm:text-right">
+              <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-[#8fa0b3]">
+                {previous.label}, the whole month
+              </p>
+              <p className="mt-1 text-4xl font-black leading-none tracking-tight text-[#d8b98a]">
+                {money(previous.net)}
+              </p>
+              <p className="mt-1.5 text-sm text-[#b6c0cc]">
+                {previous.calendarDays} days · {previous.orders} orders ·{" "}
+                {money(previous.dailyAverage)} a day
+              </p>
+              {comparison && (
+                <p
+                  className={`mt-1 text-xs font-bold ${
+                    comparison.change >= 0 ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {comparison.change >= 0 ? "▲" : "▼"} {money(Math.abs(comparison.change))} on its
+                  first {comparison.daysIn} days
+                  {comparison.percent !== null &&
+                    ` (${comparison.change >= 0 ? "+" : "−"}${Math.abs(comparison.percent).toFixed(0)}%)`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <Lifeline periods={periods} />
+        <p className="border-t border-[#3a4a60] px-5 py-2 text-xs text-[#8fa0b3]">
+          Every day since opening ·{" "}
+          <span className="font-bold text-[#b6c0cc]">{money(lifetime)}</span> earned over{" "}
+          {tradedDays} trading days and {lifetimeOrders} orders
+        </p>
       </section>
 
       {/* ── Where the month's money goes ───────────────────────────── */}
@@ -254,15 +290,6 @@ function WeekShape({ weekdays }: { weekdays: Weekday[] }) {
   );
 }
 
-function Perched({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[0.6rem] font-bold uppercase tracking-[0.18em] text-[#8fa0b3]">{label}</p>
-      <p className="text-2xl font-black tabular-nums text-[#d8b98a]">{value}</p>
-    </div>
-  );
-}
-
 /**
  * Every trading day since opening, as one continuous run of bars.
  *
@@ -289,7 +316,7 @@ function Lifeline({ periods }: { periods: Period[] }) {
           />
         ))}
       </div>
-      <div className="flex gap-px border-t border-[#3a4a60] px-5 py-2">
+      <div className="flex gap-px border-t border-[#3a4a60] px-5 pb-1 pt-2">
         {periods.map((p) => (
           <span
             key={p.key}
