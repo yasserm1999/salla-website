@@ -55,18 +55,3 @@ create index if not exists salla_delivery_events_day on salla_delivery_events (r
 create index if not exists salla_delivery_events_order on salla_delivery_events (order_id);
 
 alter table salla_delivery_events enable row level security;
-
-
--- ── Which orders the owner has already looked at ─────────────────────
---
--- Sales going up is not the same as knowing what was sold. Every new order
--- shows on the dashboard until it is marked reviewed, then it drops out and
--- the board goes back to being about work rather than news.
-
-create table if not exists salla_order_reviews (
-  order_id     text primary key,
-  reviewed_by  text not null,
-  reviewed_at  timestamptz not null default now()
-);
-
-alter table salla_order_reviews enable row level security;

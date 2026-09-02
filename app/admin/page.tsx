@@ -19,7 +19,6 @@ import {
   deliveryConcerns,
   type StopState,
 } from "@/lib/delivery";
-import { loadReviewed } from "@/lib/reviews";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 
@@ -39,15 +38,13 @@ export default async function AdminPage() {
   if (!staff) redirect("/admin/login");
 
   const { from, to } = defaultWindow();
-  const now = new Date();
-  const today = shopYmd(now);
-  // Three days is what counts as news; older than that it is just history.
-  const recentEnough = shopYmd(new Date(now.getTime() - 3 * 86_400_000));
+  const today = shopYmd(new Date());
 
   try {
     const orders = await fetchOrders(from, to);
     const runs = buildRuns(orders);
     const events = await loadEvents(today);
+    const progress = progressByOrder(events.events);
 
     /*
       A driver's page stops here. The rest of this function reads takings and
@@ -55,7 +52,6 @@ export default async function AdminPage() {
       — so it is not merely hidden from them, it is never fetched.
     */
     if (staff.role === "driver") {
-      const progress = progressByOrder(events.events);
       const states: Record<string, StopState> = {};
       for (const [id, p] of progress) states[id] = p.state;
 
@@ -89,18 +85,6 @@ export default async function AdminPage() {
       own names when somebody expands it.
     */
 
-    /*
-      What the shop has written up but nobody has read yet. A rising sales
-      figure says something happened; this says what. Only the last few days
-      count — an order from a fortnight ago is not news, ticked off or not.
-    */
-    const reviews = await loadReviewed();
-    const unreviewed = orders
-      .filter((o) => o.createdAt && shopYmd(o.createdAt) >= recentEnough)
-      .filter((o) => !reviews.reviewed.has(o.id))
-      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
-
-    const progress = progressByOrder(events.events);
     const delivery = {
       status: runStatus(runs, events.events),
       concerns: deliveryConcerns(runs, events.events),
@@ -117,8 +101,6 @@ export default async function AdminPage() {
         summary={summary}
         admin={staff.name}
         delivery={delivery}
-        unreviewed={unreviewed}
-        reviewsReady={reviews.ready}
       />
     );
   } catch (e) {

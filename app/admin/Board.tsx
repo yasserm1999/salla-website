@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Assessed, Board as BoardData, Debt, Order, Run, Summary, Urgency } from "@/lib/cleancloud";
+import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
 
 export type DeliveryView = {
@@ -124,8 +124,6 @@ export function Board({
   summary,
   admin,
   delivery,
-  unreviewed,
-  reviewsReady,
 }: {
   board: BoardData;
   runs: Run[];
@@ -133,35 +131,9 @@ export function Board({
   summary: Summary;
   admin: string;
   delivery: DeliveryView;
-  unreviewed: Order[];
-  reviewsReady: boolean;
 }) {
   const router = useRouter();
   const s = summary;
-  const [reviewing, setReviewing] = useState(false);
-  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
-
-  const news = unreviewed.filter((o) => !reviewed.has(o.id));
-
-  async function review(ids: string[]) {
-    setReviewing(true);
-    // Cleared on screen at once; the server catches up behind.
-    setReviewed((prev) => new Set([...prev, ...ids]));
-    try {
-      const res = await fetch("/api/admin/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderIds: ids }),
-      });
-      if (!res.ok) setReviewed((prev) => new Set([...prev].filter((x) => !ids.includes(x))));
-      else router.refresh();
-    } catch {
-      setReviewed((prev) => new Set([...prev].filter((x) => !ids.includes(x))));
-    } finally {
-      setReviewing(false);
-    }
-  }
-
   const [open, setOpen] = useState<Record<string, boolean>>({
     late: true,
     today: true,
@@ -269,83 +241,6 @@ export function Board({
           </button>
         </div>
       </header>
-
-      {/*
-        What has happened since you last looked.
-
-        A sales figure going up tells you something was sold and not what. Every
-        order stays here until it has actually been read, then drops out — so
-        the board goes back to being about work rather than about news.
-      */}
-      {news.length > 0 && (
-        <section className="mb-5 overflow-hidden rounded-2xl border-2 border-[#d8b98a] bg-[#f8f1e7]">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <p className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-[#26364d]">{news.length}</span>
-              <span className="text-sm font-bold uppercase tracking-widest text-[#b9925d]">
-                new order{news.length === 1 ? "" : "s"} to look at
-              </span>
-              <span className="text-sm font-bold text-[#546d83]">
-                {money(news.reduce((t, o) => t + o.total, 0))}
-              </span>
-            </p>
-            <button
-              onClick={() => review(news.map((o) => o.id))}
-              disabled={reviewing || !reviewsReady}
-              className="rounded-lg bg-[#26364d] px-3 py-2 text-sm font-bold text-white hover:bg-[#3f4f61] disabled:opacity-50"
-            >
-              Reviewed — clear all
-            </button>
-          </div>
-
-          {!reviewsReady && (
-            <p className="border-t border-[#e6dccf] bg-amber-50 px-4 py-2 text-xs text-amber-900">
-              These cannot be cleared yet — run supabase/setup.sql.
-            </p>
-          )}
-
-          <ul className="divide-y divide-[#e6dccf] border-t border-[#e6dccf] bg-white/70">
-            {news.slice(0, 30).map((o) => (
-              <li key={o.id} className="flex items-start gap-2.5 px-4 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">
-                      #{o.id}
-                    </span>
-                    <span className="font-medium text-[#26364d]">{nameOf(o)}</span>
-                    <span className="text-xs text-[#b8b1a8]">
-                      c{o.customerID}
-                      {o.createdAt &&
-                        ` · ${new Date(o.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`}
-                    </span>
-                  </p>
-                  <p className="truncate text-xs text-[#8a9099]">
-                    {o.summary || `${o.pieces} pieces`}
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-bold tabular-nums text-[#26364d]">
-                  {money(o.total)}
-                </span>
-                <button
-                  onClick={() => review([o.id])}
-                  disabled={reviewing || !reviewsReady}
-                  className="shrink-0 rounded border border-[#d8cbbd] px-2 py-1 text-xs font-bold text-[#546d83] hover:border-[#26364d] hover:text-[#26364d] disabled:opacity-40"
-                >
-                  Seen
-                </button>
-              </li>
-            ))}
-          </ul>
-          {news.length > 30 && (
-            <p className="border-t border-[#e6dccf] px-4 py-2 text-xs text-[#8a9099]">
-              and {news.length - 30} more
-            </p>
-          )}
-        </section>
-      )}
 
       {/* ── Where the van is ───────────────────────────────────────── */}
       <OnTheRoad delivery={delivery} runs={runs} nameOf={nameOf} />
