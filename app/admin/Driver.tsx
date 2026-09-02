@@ -75,7 +75,6 @@ export function Driver({
   driver,
   today: todayYmd,
   states,
-  runStarted,
   storeReady,
   storeProblem,
 }: {
@@ -84,7 +83,6 @@ export function Driver({
   today: string;
   /** What the server already knows about each stop. */
   states: Record<string, StopState>;
-  runStarted: string | null;
   storeReady: boolean;
   storeProblem: string | null;
 }) {
@@ -95,7 +93,6 @@ export function Driver({
   // What this phone has recorded but the server may not have yet.
   const [queue, setQueue] = useState<Pending[]>([]);
   const [sending, setSending] = useState(false);
-  const [startedHere, setStartedHere] = useState(false);
 
   const flush = useCallback(async () => {
     const items = readQueue();
@@ -136,7 +133,6 @@ export function Driver({
     const next = [...readQueue(), event];
     writeQueue(next);
     setQueue(next);
-    if (kind === "run_started") setStartedHere(true);
     void flush();
   }
 
@@ -154,7 +150,6 @@ export function Driver({
     return states[orderId] ?? "waiting";
   };
 
-  const started = runStarted !== null || startedHere || queue.some((q) => q.kind === "run_started");
 
   // Every stop matters to a driver, so all of them get a name up front.
   useEffect(() => {
@@ -224,22 +219,9 @@ export function Driver({
           {stopsToday === 1 ? "stop today" : "stops today"}
         </p>
 
-        {/*
-          One tap before pulling away, made in the shop where there is signal.
-          Even if every other tap is lost to a dead patch, this one tells the
-          shop the van has gone and with what.
-        */}
-        {stopsToday > 0 && !started && (
-          <button
-            onClick={() => record(null, "run_started")}
-            className="mt-3 w-full rounded-xl bg-[#d8b98a] py-3 text-base font-black uppercase tracking-wider text-[#26364d] active:bg-[#b9925d]"
-          >
-            Start the run
-          </button>
-        )}
-        {started && (
+        {done > 0 && (
           <p className="mt-2.5 border-t border-[#46586f] pt-2 text-sm font-semibold text-[#d8b98a]">
-            Run started · {done} of {stopsToday} done
+            {done} of {stopsToday} done
           </p>
         )}
 

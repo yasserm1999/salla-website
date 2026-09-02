@@ -192,6 +192,21 @@ export function Board({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, board, runs, debts]);
 
+  /*
+    While there is a round out, the page keeps itself current.
+
+    The point of the driver's buttons is that the shop sees them land, and a
+    dashboard that only tells the truth when somebody presses Refresh does not
+    deliver that. It stops once the round is finished, so a quiet evening is
+    not spent asking CleanCloud the same question forever.
+  */
+  const roundLive = delivery.status.outCount > 0 || delivery.status.waitingCount > 0;
+  useEffect(() => {
+    if (!roundLive) return;
+    const timer = window.setInterval(() => router.refresh(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [roundLive, router]);
+
   async function signOut() {
     await fetch("/api/admin", { method: "DELETE" });
     router.push("/admin/login");
@@ -524,6 +539,7 @@ export function Board({
                                   <Tags customerID={o.customerID} orderID={o.id} />
                                 </div>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <DriverMark progress={delivery.states[o.id]} />
                                   <StateBadges o={o} />
                                   {telOf(o) && (
                                     <a
@@ -752,8 +768,8 @@ function OnTheRoad({
           The van
           <span className="ml-2 font-medium normal-case tracking-normal text-[#8a9099]">
             {status.startedAt
-              ? `left at ${clock(status.startedAt)}`
-              : "has not been marked as leaving"}
+              ? `first parcel out at ${clock(status.startedAt)}`
+              : "nothing has left the shop yet"}
           </span>
         </p>
         <p className="flex flex-wrap items-baseline gap-x-4 text-sm">
@@ -810,6 +826,41 @@ function OnTheRoad({
         {!delivery.ready && ` ${delivery.problem}`}
       </p>
     </section>
+  );
+}
+
+/**
+ * What the driver has said about this parcel, if anything.
+ *
+ * Nothing is drawn until he touches it: a round he has not started should look
+ * like a plan, not like a row of failures.
+ */
+function DriverMark({ progress }: { progress?: StopProgress }) {
+  if (!progress || progress.state === "waiting") return null;
+
+  const clock = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+  if (progress.state === "onTheWay") {
+    return (
+      <span className="rounded bg-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+        In the van · {clock(progress.leftAt)}
+      </span>
+    );
+  }
+
+  if (progress.state === "delivered") {
+    return (
+      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+        ✓ Delivered {clock(progress.settledAt)}
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+      Could not — {progress.reason ?? "no reason given"}
+    </span>
   );
 }
 

@@ -5,7 +5,7 @@ import { shopYmd } from "@/lib/cleancloud";
 
 export const dynamic = "force-dynamic";
 
-const KINDS: EventKind[] = ["run_started", "on_the_way", "delivered", "failed"];
+const KINDS: EventKind[] = ["on_the_way", "delivered", "failed"];
 
 /**
  * The driver saying what he has done.
@@ -27,9 +27,9 @@ export async function POST(req: Request) {
   for (const e of raw.slice(0, 200)) {
     const kind = typeof e?.kind === "string" ? (e.kind as EventKind) : null;
     if (!kind || !KINDS.includes(kind)) continue;
-    // Only run-level events may have no order attached to them.
+    // Every event is about one parcel; there is nothing else to record.
     const orderId = typeof e?.orderId === "string" && e.orderId ? e.orderId : null;
-    if (!orderId && kind !== "run_started") continue;
+    if (!orderId) continue;
 
     events.push({
       orderId,

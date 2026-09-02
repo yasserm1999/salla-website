@@ -29,9 +29,9 @@ alter table salla_customer_investigations enable row level security;
 
 -- ── What the driver is doing ─────────────────────────────────────────
 --
--- One row per thing that happened: the van left, a parcel is on its way, a
--- parcel arrived, a parcel could not be delivered. Never updated, only added
--- to, so the day can be reconstructed exactly as it went.
+-- One row per thing that happened: a parcel is on its way, a parcel arrived,
+-- a parcel could not be delivered. Never updated, only added to, so the day can
+-- be reconstructed exactly as it went.
 --
 -- The two timestamps are the point of the table. happened_at is the driver's
 -- own clock at the moment he tapped; recorded_at is when it reached the
@@ -40,10 +40,9 @@ alter table salla_customer_investigations enable row level security;
 
 create table if not exists salla_delivery_events (
   id           bigserial primary key,
-  -- Null for events about the whole run rather than one parcel.
-  order_id     text,
+  order_id     text not null,
   run_day      date not null,
-  -- 'run_started' | 'on_the_way' | 'delivered' | 'failed'
+  -- 'on_the_way' | 'delivered' | 'failed'
   event        text not null,
   reason       text,
   by_staff     text not null,

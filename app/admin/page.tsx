@@ -61,7 +61,6 @@ export default async function AdminPage() {
           driver={staff.name}
           today={today}
           states={states}
-          runStarted={events.events.find((e) => e.kind === "run_started")?.at ?? null}
           storeReady={events.ready}
           storeProblem={events.ready ? null : events.reason}
         />

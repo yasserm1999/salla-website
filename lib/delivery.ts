@@ -19,7 +19,7 @@ import type { Run } from "./cleancloud";
 
 const TABLE = "salla_delivery_events";
 
-export type EventKind = "run_started" | "on_the_way" | "delivered" | "failed";
+export type EventKind = "on_the_way" | "delivered" | "failed";
 
 export type DeliveryEvent = {
   orderId: string | null;
@@ -188,7 +188,14 @@ export function progressByOrder(events: DeliveryEvent[]): Map<string, StopProgre
 }
 
 export type RunStatus = {
-  /** When the van left, if it has. */
+  /**
+   * When the round began.
+   *
+   * Taken as the first parcel that went out rather than a separate "I am
+   * leaving" tap. The driver marks parcels one at a time, and the moment the
+   * first one is in the van is the moment the shop's exposure starts — a
+   * button saying he is about to leave would only be one more thing to forget.
+   */
   startedAt: string | null;
   /** The latest thing the shop heard, from anywhere. */
   lastHeardAt: string | null;
@@ -209,7 +216,7 @@ export function runStatus(
   const stops = runs.filter((r) => r.day === today).flatMap((r) => r.stops);
   const progress = progressByOrder(events);
 
-  const started = events.find((e) => e.kind === "run_started");
+  const started = events.find((e) => e.kind === "on_the_way");
   const latest = events.reduce<string | null>(
     (best, e) => (best === null || Date.parse(e.at) > Date.parse(best) ? e.at : best),
     null
@@ -320,8 +327,8 @@ export function deliveryConcerns(runs: Run[], events: DeliveryEvent[], now = new
     });
   }
 
-  // The van has not left and the first promise is close.
-  if (status.startedAt === null && status.outCount === 0 && status.deliveredCount === 0) {
+  // Nothing has gone out at all and the first promise is close.
+  if (status.startedAt === null) {
     const soonest = stops
       .map((s) => dueWindowEnd(s.dueTimeLabel))
       .filter((m): m is number => m !== null)
@@ -329,8 +336,8 @@ export function deliveryConcerns(runs: Run[], events: DeliveryEvent[], now = new
     if (soonest !== undefined && soonest - minutesNow <= 90) {
       concerns.push({
         level: soonest < minutesNow ? "urgent" : "watch",
-        headline: "The run has not been started",
-        detail: `${stops.length} stop${stops.length === 1 ? "" : "s"} today and nobody has tapped away yet.`,
+        headline: "Nothing has left the shop",
+        detail: `${stops.length} stop${stops.length === 1 ? "" : "s"} today and not one has been marked on the way.`,
         orderIds: [],
       });
     }
