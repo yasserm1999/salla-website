@@ -206,7 +206,8 @@ export function Revenue({
       <p className="text-xs text-[#b8b1a8]">
         Since opening on 9 July the shop has earned{" "}
         <span className="font-bold text-[#546d83]">{money(lifetime)}</span> from {lifetimeOrders}{" "}
-        customer orders over {tradedDays} trading days. Sales are counted the day an order is
+        customer orders over {tradedDays}{" "}
+        trading days. Sales are counted the day an order is
         written up, not the day it is paid; the owners&rsquo; own accounts (c1, c6) and the carpet
         contractor&rsquo;s share are taken out throughout — signed in as {admin}
       </p>
