@@ -79,9 +79,8 @@ export function Revenue({
       <section className="mb-7 overflow-hidden rounded-2xl bg-[#26364d] text-white">
         {/*
           The two figures a shopkeeper actually wants side by side: where this
-          month stands, and what the last one came to. The lifetime total is
-          still here, but under the bars — it is the story the chart already
-          tells, and it is not a number anyone acts on.
+          month stands, and what the last one came to — with the same two months
+          drawn against each other underneath, a date at a time.
         */}
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 px-5 pb-4 pt-5">
           <div>
@@ -124,12 +123,7 @@ export function Revenue({
             </div>
           )}
         </div>
-        <Lifeline periods={periods} />
-        <p className="border-t border-[#3a4a60] px-5 py-2 text-xs text-[#8fa0b3]">
-          Every day since opening ·{" "}
-          <span className="font-bold text-[#b6c0cc]">{money(lifetime)}</span> earned over{" "}
-          {tradedDays} trading days and {lifetimeOrders} orders
-        </p>
+        <DayVersusDay current={current} previous={previous} />
       </section>
 
       {/* ── Where the month's money goes ───────────────────────────── */}
@@ -210,9 +204,11 @@ export function Revenue({
       </section>
 
       <p className="text-xs text-[#b8b1a8]">
-        Sales are counted the day an order is written up, not the day it is paid. The owners&rsquo;
-        own accounts (c1, c6) and the carpet contractor&rsquo;s share are taken out throughout —
-        signed in as {admin}
+        Since opening on 9 July the shop has earned{" "}
+        <span className="font-bold text-[#546d83]">{money(lifetime)}</span> from {lifetimeOrders}{" "}
+        customer orders over {tradedDays} trading days. Sales are counted the day an order is
+        written up, not the day it is paid; the owners&rsquo; own accounts (c1, c6) and the carpet
+        contractor&rsquo;s share are taken out throughout — signed in as {admin}
       </p>
     </main>
   );
@@ -291,42 +287,106 @@ function WeekShape({ weekdays }: { weekdays: Weekday[] }) {
 }
 
 /**
- * Every trading day since opening, as one continuous run of bars.
+ * This month against the last, a day at a time.
  *
- * The months are told apart by tint rather than by a gap, so the shop's growth
- * reads as one story rather than three separate charts — which is what it is.
+ * The same date in two months is the only fair daily comparison a shop has:
+ * the 15th against the 15th, with whatever weekday and whatever weather each
+ * happened to bring. Last month is drawn as a wide muted bar and this month
+ * sits in front of it, so beating the day is a bar that overtops its backdrop
+ * and falling short is one that does not.
+ *
+ * Days that have not happened yet still show last month's bar. That is the
+ * point of it — what is left to beat.
  */
-function Lifeline({ periods }: { periods: Period[] }) {
-  const days = periods.flatMap((p) => p.days.map((d) => ({ ...d, key: p.key })));
-  const peak = Math.max(...days.map((d) => d.net), 1);
-  const tints = ["bg-[#4a6b8a]", "bg-[#7aa6b8]", "bg-[#d8b98a]", "bg-[#e8c9a0]"];
-  const order = periods.map((p) => p.key);
+function DayVersusDay({
+  current,
+  previous,
+}: {
+  current: Period;
+  previous: Period | null;
+}) {
+  const dayOf = (d: DayLine) => Number(d.day.slice(8));
+  const currentBy = new Map(current.days.map((d) => [dayOf(d), d]));
+  const previousBy = new Map((previous?.days ?? []).map((d) => [dayOf(d), d]));
+
+  const lastSlot = Math.max(0, ...currentBy.keys(), ...previousBy.keys());
+  const slots = Array.from({ length: lastSlot }, (_, i) => i + 1);
+  const peak = Math.max(
+    ...[...currentBy.values(), ...previousBy.values()].map((d) => d.net),
+    0.01
+  );
+
+  const ahead = slots.filter((n) => {
+    const c = currentBy.get(n);
+    const b = previousBy.get(n);
+    return c && c.orders > 0 && (!b || c.net > b.net);
+  }).length;
+  const played = slots.filter((n) => currentBy.get(n)?.orders).length;
 
   return (
     <div>
-      <div className="flex h-24 items-end gap-px px-5">
-        {days.map((d) => (
-          <span
-            key={d.day}
-            title={`${dayLabel(d.day)} — ${d.orders ? money(d.net) : "shut"}`}
-            className={`min-w-0 flex-1 rounded-t-sm ${
-              d.orders === 0 ? "bg-[#3a4a60]" : tints[order.indexOf(d.key) % tints.length]
-            }`}
-            style={{ height: `${Math.max(2, (d.net / peak) * 100)}%` }}
-          />
-        ))}
+      <div className="flex items-end gap-px px-5" style={{ height: "7rem" }}>
+        {slots.map((n) => {
+          const c = currentBy.get(n);
+          const b = previousBy.get(n);
+          const beat = c && b ? c.net > b.net : undefined;
+          return (
+            <span key={n} className="relative flex h-full min-w-0 flex-1 items-end">
+              {/* Last month, behind. */}
+              {b && (
+                <span
+                  className="absolute inset-x-0 bottom-0 rounded-t-sm bg-[#4a5f7a]"
+                  style={{ height: `${Math.max(1, (b.net / peak) * 100)}%` }}
+                  title={`${previous!.label} ${n} — ${b.orders ? money(b.net) : "shut"}`}
+                />
+              )}
+              {/* This month, in front and narrower so the one behind reads. */}
+              {c && (
+                <span
+                  className={`absolute bottom-0 left-1/2 w-[58%] -translate-x-1/2 rounded-t-sm ${
+                    c.orders === 0
+                      ? "bg-[#33455c]"
+                      : beat === false
+                        ? "bg-[#d8b98a]"
+                        : "bg-[#7fd6b0]"
+                  }`}
+                  style={{ height: `${Math.max(c.orders ? 2 : 0, (c.net / peak) * 100)}%` }}
+                  title={`${current.label} ${n} — ${c.orders ? money(c.net) : "shut"}`}
+                />
+              )}
+            </span>
+          );
+        })}
       </div>
-      <div className="flex gap-px border-t border-[#3a4a60] px-5 pb-1 pt-2">
-        {periods.map((p) => (
+
+      {/* A date every five days is enough to find your place. */}
+      <div className="flex gap-px px-5 pt-1">
+        {slots.map((n) => (
           <span
-            key={p.key}
-            style={{ flexGrow: p.days.length }}
-            className="min-w-0 truncate text-[0.68rem] font-bold uppercase tracking-widest text-[#8fa0b3]"
+            key={n}
+            className="min-w-0 flex-1 text-center text-[0.55rem] font-semibold text-[#6b7d92]"
           >
-            {p.label}
+            {n === 1 || n % 5 === 0 ? n : ""}
           </span>
         ))}
       </div>
+
+      <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[#3a4a60] px-5 py-2 text-xs text-[#8fa0b3]">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#7fd6b0]" /> {current.label}, ahead
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#d8b98a]" /> {current.label}, behind
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#4a5f7a]" /> {previous?.label ?? "last month"}
+        </span>
+        {previous && played > 0 && (
+          <span className="ml-auto font-semibold text-[#b6c0cc]">
+            Beaten on {ahead} of {played} day{played === 1 ? "" : "s"} so far
+          </span>
+        )}
+      </p>
     </div>
   );
 }
