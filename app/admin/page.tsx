@@ -12,6 +12,14 @@ import {
   defaultWindow,
   CleanCloudError,
 } from "@/lib/cleancloud";
+import {
+  loadEvents,
+  progressByOrder,
+  runStatus,
+  deliveryConcerns,
+  type StopState,
+} from "@/lib/delivery";
+import { loadReviewed } from "@/lib/reviews";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 
@@ -31,23 +39,43 @@ export default async function AdminPage() {
   if (!staff) redirect("/admin/login");
 
   const { from, to } = defaultWindow();
+  const now = new Date();
+  const today = shopYmd(now);
+  // Three days is what counts as news; older than that it is just history.
+  const recentEnough = shopYmd(new Date(now.getTime() - 3 * 86_400_000));
 
   try {
     const orders = await fetchOrders(from, to);
     const runs = buildRuns(orders);
+    const events = await loadEvents(today);
 
     /*
       A driver's page stops here. The rest of this function reads takings and
       builds the debt list, and none of that should travel to a phone in a van
       — so it is not merely hidden from them, it is never fetched.
     */
-    if (staff.role === "driver") return <Driver runs={runs} driver={staff.name} />;
+    if (staff.role === "driver") {
+      const progress = progressByOrder(events.events);
+      const states: Record<string, StopState> = {};
+      for (const [id, p] of progress) states[id] = p.state;
+
+      return (
+        <Driver
+          runs={runs}
+          driver={staff.name}
+          today={today}
+          states={states}
+          runStarted={events.events.find((e) => e.kind === "run_started")?.at ?? null}
+          storeReady={events.ready}
+          storeProblem={events.ready ? null : events.reason}
+        />
+      );
+    }
 
     const board = buildBoard(orders);
     const debts = buildDebts(orders);
 
     // Money is read from payments, so the two ranges are asked for separately.
-    const today = shopYmd(new Date());
     const [revenueToday, revenueMonth] = await Promise.all([
       fetchTakings(today, today),
       fetchTakings(monthStart(), today),
@@ -55,17 +83,31 @@ export default async function AdminPage() {
     const summary = buildSummary(orders, board, runs, revenueToday, revenueMonth);
 
     /*
-      Customer records cost one request each and there is no list endpoint, so
-      they are fetched only where somebody might act on them: the orders still
-      to be washed, and everything a driver has to take out. Nobody is ringing
-      the fifty-odd bags waiting on the rack today.
-    */
-    /*
       Names are not fetched here. CleanCloud rate-limits that endpoint, and
       waiting for forty of them made every load take ten seconds for names
       most of which nobody opens. The board draws now; each list asks for its
       own names when somebody expands it.
     */
+
+    /*
+      What the shop has written up but nobody has read yet. A rising sales
+      figure says something happened; this says what. Only the last few days
+      count — an order from a fortnight ago is not news, ticked off or not.
+    */
+    const reviews = await loadReviewed();
+    const unreviewed = orders
+      .filter((o) => o.createdAt && shopYmd(o.createdAt) >= recentEnough)
+      .filter((o) => !reviews.reviewed.has(o.id))
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+
+    const progress = progressByOrder(events.events);
+    const delivery = {
+      status: runStatus(runs, events.events),
+      concerns: deliveryConcerns(runs, events.events),
+      states: Object.fromEntries(progress),
+      ready: events.ready,
+      problem: events.ready ? null : events.reason,
+    };
 
     return (
       <Board
@@ -74,6 +116,9 @@ export default async function AdminPage() {
         debts={debts}
         summary={summary}
         admin={staff.name}
+        delivery={delivery}
+        unreviewed={unreviewed}
+        reviewsReady={reviews.ready}
       />
     );
   } catch (e) {
@@ -81,13 +126,13 @@ export default async function AdminPage() {
       e instanceof CleanCloudError ? e.message : "Something went wrong reading the orders.";
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="text-xl font-bold text-slate-900">Shop dashboard</h1>
+        <h1 className="text-xl font-bold text-[#26364d]">Shop dashboard</h1>
         <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           {message}
         </p>
-        <p className="mt-3 text-sm text-slate-500">
-          The orders live in CleanCloud, so this page is only as available as they are.
-          Nothing is stored here — reload once it answers again.
+        <p className="mt-3 text-sm text-[#8a9099]">
+          The orders live in CleanCloud, so this page is only as available as they are. Nothing is
+          stored here — reload once it answers again.
         </p>
       </main>
     );

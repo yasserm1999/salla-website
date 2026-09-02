@@ -401,7 +401,7 @@ export function shopYmd(d: Date): string {
 }
 
 /** The time of day in the shop, in minutes since midnight. */
-function shopMinutesNow(now: Date): number {
+export function shopMinutesNow(now: Date): number {
   const hhmm = new Intl.DateTimeFormat("en-GB", {
     timeZone: SHOP_TZ,
     hour: "2-digit",

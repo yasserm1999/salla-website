@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Assessed, Run } from "@/lib/cleancloud";
+import type { EventKind, StopState } from "@/lib/delivery";
 
 /**
  * The round, for the person driving it.
@@ -18,6 +19,37 @@ import type { Assessed, Run } from "@/lib/cleancloud";
  */
 
 type Person = { name: string | null; tel: string | null; place: string | null };
+
+/** A tap, with the moment it was made rather than the moment it was sent. */
+type Pending = { orderId: string | null; kind: EventKind; reason?: string; at: string; day: string };
+
+const QUEUE_KEY = "salla_driver_queue";
+
+/*
+  Nothing is lost to a dead signal.
+
+  Every tap is written to the phone first and sent afterwards, carrying the
+  time it was made. If the van is out of coverage the taps sit in the queue and
+  go up together the moment it comes back — and because each one kept its own
+  timestamp, the shop learns what really happened at 7:40 rather than a row of
+  events all stamped with the moment he got a bar of signal back.
+*/
+function readQueue(): Pending[] {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as Pending[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeQueue(items: Pending[]) {
+  try {
+    window.localStorage.setItem(QUEUE_KEY, JSON.stringify(items));
+  } catch {
+    // A phone with no storage still works; it just cannot survive a reload.
+  }
+}
 
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,12 +68,93 @@ function dayName(day: string): string {
 }
 
 /** "7pm-8pm" as it should be read: with a proper dash, and no shouting. */
-const window = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
+const timeWindow = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
 
-export function Driver({ runs, driver }: { runs: Run[]; driver: string }) {
+export function Driver({
+  runs,
+  driver,
+  today: todayYmd,
+  states,
+  runStarted,
+  storeReady,
+  storeProblem,
+}: {
+  runs: Run[];
+  driver: string;
+  today: string;
+  /** What the server already knows about each stop. */
+  states: Record<string, StopState>;
+  runStarted: string | null;
+  storeReady: boolean;
+  storeProblem: string | null;
+}) {
   const router = useRouter();
   const [people, setPeople] = useState<Record<string, Person>>({});
   const [looking, setLooking] = useState(false);
+
+  // What this phone has recorded but the server may not have yet.
+  const [queue, setQueue] = useState<Pending[]>([]);
+  const [sending, setSending] = useState(false);
+  const [startedHere, setStartedHere] = useState(false);
+
+  const flush = useCallback(async () => {
+    const items = readQueue();
+    if (items.length === 0) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/admin/delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: items }),
+      });
+      if (!res.ok) return; // Keep them; the next attempt will try again.
+      writeQueue([]);
+      setQueue([]);
+      router.refresh();
+    } catch {
+      // No signal. The queue stays exactly where it is.
+    } finally {
+      setSending(false);
+    }
+  }, [router]);
+
+  // Send on arrival, whenever the phone finds signal, and every half minute.
+  useEffect(() => {
+    setQueue(readQueue());
+    void flush();
+    const onOnline = () => void flush();
+    window.addEventListener("online", onOnline);
+    const timer = window.setInterval(() => void flush(), 30_000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(timer);
+    };
+  }, [flush]);
+
+  function record(orderId: string | null, kind: EventKind, reason?: string) {
+    const event: Pending = { orderId, kind, reason, at: new Date().toISOString(), day: todayYmd };
+    const next = [...readQueue(), event];
+    writeQueue(next);
+    setQueue(next);
+    if (kind === "run_started") setStartedHere(true);
+    void flush();
+  }
+
+  /*
+    What this phone believes, which is the server's view plus anything it has
+    not managed to send yet. The driver must never tap "delivered", lose
+    signal, and watch the parcel reappear as undelivered.
+  */
+  const stateOf = (orderId: string): StopState => {
+    const mine = queue.filter((q) => q.orderId === orderId);
+    const last = mine[mine.length - 1];
+    if (last?.kind === "delivered") return "delivered";
+    if (last?.kind === "failed") return "failed";
+    if (last?.kind === "on_the_way") return "onTheWay";
+    return states[orderId] ?? "waiting";
+  };
+
+  const started = runStarted !== null || startedHere || queue.some((q) => q.kind === "run_started");
 
   // Every stop matters to a driver, so all of them get a name up front.
   useEffect(() => {
@@ -69,7 +182,9 @@ export function Driver({ runs, driver }: { runs: Run[]; driver: string }) {
 
   const today = runs.find((r) => r.label === "Today");
   const rest = runs.filter((r) => r !== today);
-  const stopsToday = today?.stops.length ?? 0;
+  const todayStops = today?.stops ?? [];
+  const stopsToday = todayStops.length;
+  const done = todayStops.filter((s) => stateOf(s.id) === "delivered").length;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-5">
@@ -97,11 +212,43 @@ export function Driver({ runs, driver }: { runs: Run[]; driver: string }) {
         </div>
       </header>
 
+      {!storeReady && (
+        <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span className="font-bold">The buttons will not save yet.</span> {storeProblem}
+        </p>
+      )}
+
       <section className="mb-5 rounded-2xl border-2 border-[#26364d] bg-[#26364d] px-5 py-4 text-white">
         <p className="text-5xl font-black leading-none">{stopsToday}</p>
         <p className="mt-1.5 text-sm font-semibold uppercase tracking-widest text-[#d8cbbd]">
           {stopsToday === 1 ? "stop today" : "stops today"}
         </p>
+
+        {/*
+          One tap before pulling away, made in the shop where there is signal.
+          Even if every other tap is lost to a dead patch, this one tells the
+          shop the van has gone and with what.
+        */}
+        {stopsToday > 0 && !started && (
+          <button
+            onClick={() => record(null, "run_started")}
+            className="mt-3 w-full rounded-xl bg-[#d8b98a] py-3 text-base font-black uppercase tracking-wider text-[#26364d] active:bg-[#b9925d]"
+          >
+            Start the run
+          </button>
+        )}
+        {started && (
+          <p className="mt-2.5 border-t border-[#46586f] pt-2 text-sm font-semibold text-[#d8b98a]">
+            Run started · {done} of {stopsToday} done
+          </p>
+        )}
+
+        {queue.length > 0 && (
+          <p className="mt-2 text-xs text-amber-300">
+            {queue.length} update{queue.length === 1 ? "" : "s"} waiting to send
+            {sending ? " — sending…" : " — will go as soon as there is signal"}
+          </p>
+        )}
         {today && today.notReady > 0 && (
           <p className="mt-2 border-t border-[#46586f] pt-2 text-sm text-amber-300">
             {today.notReady} of them {today.notReady === 1 ? "is" : "are"} still being washed — check
@@ -116,10 +263,12 @@ export function Driver({ runs, driver }: { runs: Run[]; driver: string }) {
         </p>
       )}
 
-      {today && <RunBlock run={today} people={people} highlight />}
+      {today && (
+        <RunBlock run={today} people={people} highlight stateOf={stateOf} record={record} />
+      )}
 
       {rest.map((run) => (
-        <RunBlock key={run.day} run={run} people={people} />
+        <RunBlock key={run.day} run={run} people={people} stateOf={stateOf} record={record} />
       ))}
     </main>
   );
@@ -129,12 +278,19 @@ function RunBlock({
   run,
   people,
   highlight = false,
+  stateOf,
+  record,
 }: {
   run: Run;
   people: Record<string, Person>;
   highlight?: boolean;
+  stateOf: (orderId: string) => StopState;
+  record: (orderId: string | null, kind: EventKind, reason?: string) => void;
 }) {
+  const [showDone, setShowDone] = useState(false);
   const missed = run.label.startsWith("Missed");
+  const done = run.stops.filter((s) => stateOf(s.id) === "delivered");
+  const live = run.stops.filter((s) => stateOf(s.id) !== "delivered");
 
   /*
     Which day a stop belongs to decides whether the driver leaves now or
@@ -156,19 +312,65 @@ function RunBlock({
         <span className="text-xl font-black uppercase tracking-wide">{run.label}</span>
         <span className="text-sm font-semibold opacity-80">{dayName(run.day)}</span>
         <span className="ml-auto text-sm font-bold">
-          {run.stops.length} {run.stops.length === 1 ? "stop" : "stops"}
+          {live.length} {live.length === 1 ? "stop" : "stops"}
+          {done.length > 0 && <span className="opacity-70"> · {done.length} done</span>}
         </span>
       </h2>
       <div className="space-y-2.5">
-        {run.stops.map((stop) => (
-          <Stop key={stop.id} stop={stop} person={people[stop.customerID]} />
+        {live.map((stop) => (
+          <Stop
+            key={stop.id}
+            stop={stop}
+            person={people[stop.customerID]}
+            state={stateOf(stop.id)}
+            record={record}
+          />
         ))}
+        {live.length === 0 && done.length > 0 && (
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-center text-sm font-semibold text-emerald-800">
+            All {done.length} done.
+          </p>
+        )}
       </div>
+
+      {done.length > 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setShowDone((v) => !v)}
+            className="text-xs font-bold uppercase tracking-wider text-[#8a9099] active:text-[#26364d]"
+          >
+            {showDone ? "Hide" : "Show"} {done.length} delivered
+          </button>
+          {showDone && (
+            <div className="mt-2 space-y-2.5">
+              {done.map((stop) => (
+                <Stop
+                  key={stop.id}
+                  stop={stop}
+                  person={people[stop.customerID]}
+                  state={stateOf(stop.id)}
+                  record={record}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
 
-function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
+function Stop({
+  stop,
+  person,
+  state,
+  record,
+}: {
+  stop: Assessed;
+  person?: Person;
+  state: StopState;
+  record: (orderId: string | null, kind: EventKind, reason?: string) => void;
+}) {
   const name = person?.name ?? `Customer ${stop.customerID}`;
   const tel = person?.tel;
   // The address written on the order wins: it is where this parcel was
@@ -178,8 +380,16 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
 
   return (
     <article
-      className={`rounded-xl border bg-white px-4 py-3 ${
-        stop.cleaned ? "border-[#ece7e1]" : "border-amber-300 bg-amber-50"
+      className={`rounded-xl border px-4 py-3 ${
+        state === "delivered"
+          ? "border-emerald-200 bg-emerald-50/40 opacity-70"
+          : state === "onTheWay"
+            ? "border-[#26364d] bg-white ring-1 ring-[#26364d]"
+            : state === "failed"
+              ? "border-red-300 bg-red-50"
+              : stop.cleaned
+                ? "border-[#ece7e1] bg-white"
+                : "border-amber-300 bg-amber-50"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -189,7 +399,7 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
               #{stop.id}
             </span>
             <span className="text-2xl font-black leading-none tracking-tight text-[#26364d]">
-              {window(stop.dueTimeLabel) ?? (
+              {timeWindow(stop.dueTimeLabel) ?? (
                 <span className="text-base text-[#b8b1a8]">no time set</span>
               )}
             </span>
@@ -217,6 +427,11 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
         ) : (
           <span className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-black uppercase tracking-wider text-white">
             Not ready
+          </span>
+        )}
+        {state === "onTheWay" && (
+          <span className="rounded-lg bg-[#26364d] px-3 py-1.5 text-sm font-black uppercase tracking-wider text-white">
+            In the van
           </span>
         )}
         {stop.rack ? (
@@ -270,6 +485,56 @@ function Stop({ stop, person }: { stop: Assessed; person?: Person }) {
           Call {tel}
         </a>
       )}
+
+      {/*
+        Big targets, pressed at the kerb with one hand. The card only ever
+        offers the next thing that can happen to this parcel, so there is
+        nothing to read and nothing to get wrong.
+      */}
+      {state === "waiting" && (
+        <button
+          onClick={() => record(stop.id, "on_the_way")}
+          className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61]"
+        >
+          Start delivery
+        </button>
+      )}
+
+      {state === "onTheWay" && (
+        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+          <button
+            onClick={() => record(stop.id, "delivered")}
+            className="rounded-lg bg-emerald-600 py-3 text-base font-black uppercase tracking-wider text-white active:bg-emerald-700"
+          >
+            Delivered
+          </button>
+          <button
+            onClick={() => {
+              const reason = window.prompt("What happened? (nobody in, refused, no answer…)");
+              if (reason !== null) record(stop.id, "failed", reason || "not delivered");
+            }}
+            className="rounded-lg border-2 border-red-300 px-3 text-sm font-bold uppercase text-red-700 active:bg-red-50"
+          >
+            Could not
+          </button>
+        </div>
+      )}
+
+      {state === "delivered" && (
+        <p className="mt-2 rounded-lg bg-emerald-50 py-2.5 text-center text-sm font-black uppercase tracking-wider text-emerald-700">
+          ✓ Delivered
+        </p>
+      )}
+
+      {state === "failed" && (
+        <button
+          onClick={() => record(stop.id, "on_the_way")}
+          className="mt-2 w-full rounded-lg border-2 border-amber-400 bg-amber-50 py-2.5 text-sm font-bold uppercase tracking-wider text-amber-800 active:bg-amber-100"
+        >
+          Not delivered — take it out again
+        </button>
+      )}
+
     </article>
   );
 }
