@@ -206,6 +206,12 @@ export function Board({
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/admin/revenue"
+            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+          >
+            Revenue
+          </Link>
+          <Link
             href="/admin/customers"
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
           >
@@ -245,6 +251,11 @@ export function Board({
           <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
             {s.salesToday.count} order{s.salesToday.count === 1 ? "" : "s"} written today
           </p>
+          <p className="mt-1.5 border-t border-[#f0e9df] pt-1.5 text-xs text-[#8a9099]">
+            Yesterday{" "}
+            <span className="font-bold text-[#546d83]">{money(s.salesYesterday.amount)}</span>{" "}
+            <span className="text-[#b8b1a8]">({s.salesYesterday.count})</span>
+          </p>
         </div>
 
         <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
@@ -256,6 +267,13 @@ export function Board({
           </p>
           <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
             {s.salesMonth.count} order{s.salesMonth.count === 1 ? "" : "s"} this month
+          </p>
+          <p className="mt-1.5 border-t border-[#f0e9df] pt-1.5 text-xs text-[#8a9099]">
+            Same point last month{" "}
+            <span className="font-bold text-[#546d83]">
+              {money(s.salesLastMonthToDate.amount)}
+            </span>{" "}
+            <Delta now={s.salesMonth.amount} then={s.salesLastMonthToDate.amount} />
           </p>
         </div>
 
@@ -683,6 +701,18 @@ export function Board({
  * some people by their number; the order number after it, smaller, since it
  * is what CleanCloud calls the job rather than what anybody says out loud.
  */
+/** How this period stands against the last one, in a word and a colour. */
+function Delta({ now, then }: { now: number; then: number }) {
+  if (then <= 0) return null;
+  const percent = ((now - then) / then) * 100;
+  const up = percent >= 0;
+  return (
+    <span className={`font-bold ${up ? "text-emerald-600" : "text-red-600"}`}>
+      {up ? "▲" : "▼"} {Math.abs(percent).toFixed(0)}%
+    </span>
+  );
+}
+
 /** Ready, washing or collected — said the same way wherever it appears. */
 function StateBadges({ o }: { o: Assessed }) {
   return (

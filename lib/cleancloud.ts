@@ -737,6 +737,15 @@ export type Summary = {
   salesMonth: Money;
   revenueToday: Money;
   revenueMonth: Money;
+  /*
+    Yesterday, and where the month stood at this point in the last one.
+
+    A single day means little on its own — a quiet Tuesday is only bad next to
+    the Tuesdays before it — so today's figure is given something to be
+    measured against without leaving the page.
+  */
+  salesYesterday: Money;
+  salesLastMonthToDate: Money;
   /** Days from taking it in to having it washed, over the last month. */
   averageTurnaroundDays: number | null;
   /** How far past its promise the worst unwashed order is; 0 means due earlier today. */
@@ -880,6 +889,24 @@ export function buildSummary(
     0
   );
 
+  const yesterday = shopYmd(new Date(now.getTime() - DAY));
+  const writtenYesterday = orders.filter((o) => o.createdAt && shopYmd(o.createdAt) === yesterday);
+
+  /*
+    The same stretch of the previous month, so a part-month is compared with a
+    part-month. Asking for "the 2nd" of a previous month is safe here because
+    the range is built from strings rather than by subtracting a month from a
+    date, which goes wrong on the 31st.
+  */
+  const dayOfMonth = today.slice(8);
+  const [year, month] = today.slice(0, 7).split("-").map(Number);
+  const prev = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+  const lastMonthSoFar = orders.filter((o) => {
+    if (!o.createdAt) return false;
+    const d = shopYmd(o.createdAt);
+    return d.slice(0, 7) === prev && d.slice(8) <= dayOfMonth;
+  });
+
   const carpetsToday = buildCarpetBill(writtenToday);
   const carpetsMonth = buildCarpetBill(writtenThisMonth);
   const soldToday = writtenToday.reduce((sum, o) => sum + o.total, 0);
@@ -890,6 +917,14 @@ export function buildSummary(
     worstDaysLate,
     carpetsToday,
     carpetsMonth,
+    salesYesterday: {
+      amount: writtenYesterday.reduce((sum, o) => sum + o.total, 0),
+      count: writtenYesterday.length,
+    },
+    salesLastMonthToDate: {
+      amount: lastMonthSoFar.reduce((sum, o) => sum + o.total, 0),
+      count: lastMonthSoFar.length,
+    },
     netSalesToday: soldToday - carpetsToday.cost,
     netSalesMonth: soldMonth - carpetsMonth.cost,
     dueToday: board.totals.dueToday,
