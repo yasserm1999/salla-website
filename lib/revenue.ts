@@ -236,3 +236,65 @@ export function likeForLike(periods: Period[]): LikeForLike | null {
     percent: lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : null,
   };
 }
+
+export type Weekday = {
+  /** 0 is Sunday, the start of the week here. */
+  index: number;
+  name: string;
+  net: number;
+  orders: number;
+  /** Days of this name the shop actually opened. */
+  tradingDays: number;
+  /** Days of this name that have happened at all. */
+  occurrences: number;
+  /** Net over the days it traded — the fair way to compare a Friday. */
+  average: number;
+  /** How that stands against the average trading day, as a percentage. */
+  vsAverage: number;
+};
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * How each day of the week performs.
+ *
+ * Measured per trading day rather than per occurrence: a shop that opens on
+ * six Fridays out of eight should be judged on the six it opened, not punished
+ * for the two it did not. Taken across every period, because a single month
+ * gives four of each weekday and four is not a pattern.
+ */
+export function weekdayPerformance(periods: Period[]): Weekday[] {
+  const buckets = WEEKDAY_NAMES.map((name, index) => ({
+    index,
+    name,
+    net: 0,
+    orders: 0,
+    tradingDays: 0,
+    occurrences: 0,
+  }));
+
+  for (const period of periods) {
+    for (const day of period.days) {
+      const at = new Date(Date.parse(`${day.day}T12:00:00Z`)).getUTCDay();
+      const b = buckets[at];
+      b.occurrences += 1;
+      if (day.orders === 0) continue;
+      b.net += day.net;
+      b.orders += day.orders;
+      b.tradingDays += 1;
+    }
+  }
+
+  const traded = buckets.reduce((s, b) => s + b.tradingDays, 0);
+  const total = buckets.reduce((s, b) => s + b.net, 0);
+  const overall = traded ? total / traded : 0;
+
+  return buckets.map((b) => {
+    const average = b.tradingDays ? b.net / b.tradingDays : 0;
+    return {
+      ...b,
+      average,
+      vsAverage: overall > 0 ? ((average - overall) / overall) * 100 : 0,
+    };
+  });
+}

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentStaff } from "@/lib/admin-session";
 import { fetchOrders, shopYmd, CleanCloudError } from "@/lib/cleancloud";
-import { buildPeriods, likeForLike, SHOP_OPENED } from "@/lib/revenue";
+import { buildPeriods, likeForLike, weekdayPerformance, SHOP_OPENED } from "@/lib/revenue";
 import { Revenue } from "./Revenue";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,14 @@ export default async function RevenuePage() {
     const orders = await fetchOrders(SHOP_OPENED, shopYmd(new Date()));
     const periods = buildPeriods(orders);
 
-    return <Revenue periods={periods} comparison={likeForLike(periods)} admin={staff.name} />;
+    return (
+      <Revenue
+        periods={periods}
+        comparison={likeForLike(periods)}
+        weekdays={weekdayPerformance(periods)}
+        admin={staff.name}
+      />
+    );
   } catch (e) {
     const message =
       e instanceof CleanCloudError ? e.message : "Something went wrong reading the orders.";
