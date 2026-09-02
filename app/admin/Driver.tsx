@@ -208,8 +208,15 @@ export function Driver({
       </header>
 
       {!storeReady && (
-        <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <span className="font-bold">The buttons will not save yet.</span> {storeProblem}
+        <p className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="font-bold">Nothing you press is reaching the shop.</span> {storeProblem}
+        </p>
+      )}
+
+      {queue.length > 0 && (
+        <p className="mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          {queue.length} update{queue.length === 1 ? "" : "s"} not sent to the shop yet
+          {sending ? " — sending now…" : ". They will go by themselves once there is signal."}
         </p>
       )}
 
@@ -225,12 +232,7 @@ export function Driver({
           </p>
         )}
 
-        {queue.length > 0 && (
-          <p className="mt-2 text-xs text-amber-300">
-            {queue.length} update{queue.length === 1 ? "" : "s"} waiting to send
-            {sending ? " — sending…" : " — will go as soon as there is signal"}
-          </p>
-        )}
+
         {today && today.notReady > 0 && (
           <p className="mt-2 border-t border-[#46586f] pt-2 text-sm text-amber-300">
             {today.notReady} of them {today.notReady === 1 ? "is" : "are"} still being washed — check
@@ -473,14 +475,27 @@ function Stop({
         offers the next thing that can happen to this parcel, so there is
         nothing to read and nothing to get wrong.
       */}
-      {state === "waiting" && (
-        <button
-          onClick={() => record(stop.id, "on_the_way")}
-          className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61]"
-        >
-          Start delivery
-        </button>
-      )}
+      {/*
+        A parcel that is still in the machine cannot be in the van.
+
+        The button used to be offered regardless, which let a driver mark a
+        wash as on its way and left the shop believing a bag had gone out that
+        was still wet. Readiness is CleanCloud's to say, so until it says so
+        there is nothing to press.
+      */}
+      {state === "waiting" &&
+        (stop.cleaned ? (
+          <button
+            onClick={() => record(stop.id, "on_the_way")}
+            className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61]"
+          >
+            Start delivery
+          </button>
+        ) : (
+          <p className="mt-2 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-amber-800">
+            Still washing — not ready to load
+          </p>
+        ))}
 
       {state === "onTheWay" && (
         <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
@@ -508,14 +523,19 @@ function Stop({
         </p>
       )}
 
-      {state === "failed" && (
-        <button
-          onClick={() => record(stop.id, "on_the_way")}
-          className="mt-2 w-full rounded-lg border-2 border-amber-400 bg-amber-50 py-2.5 text-sm font-bold uppercase tracking-wider text-amber-800 active:bg-amber-100"
-        >
-          Not delivered — take it out again
-        </button>
-      )}
+      {state === "failed" &&
+        (stop.cleaned ? (
+          <button
+            onClick={() => record(stop.id, "on_the_way")}
+            className="mt-2 w-full rounded-lg border-2 border-amber-400 bg-amber-50 py-2.5 text-sm font-bold uppercase tracking-wider text-amber-800 active:bg-amber-100"
+          >
+            Not delivered — take it out again
+          </button>
+        ) : (
+          <p className="mt-2 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-amber-800">
+            Not delivered · back in the wash
+          </p>
+        ))}
 
     </article>
   );
