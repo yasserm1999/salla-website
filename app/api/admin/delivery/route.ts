@@ -18,6 +18,9 @@ const KINDS: EventKind[] = ["on_the_way", "delivered", "failed"];
 export async function POST(req: Request) {
   const staff = await currentStaff();
   if (!staff) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (staff.role === "washer") {
+    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => null);
   const raw = Array.isArray(body?.events) ? body.events : [];

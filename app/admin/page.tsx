@@ -21,6 +21,7 @@ import {
 } from "@/lib/delivery";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
+import { Work } from "./Work";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Salla — shop dashboard" };
@@ -68,6 +69,17 @@ export default async function AdminPage() {
     }
 
     const board = buildBoard(orders);
+
+    /*
+      A washer's page stops here too, and for the same reason: what follows
+      reads the takings and builds the debt list, and none of that is his to
+      see. He gets the same orders in the same order of urgency, with every
+      figure of money absent rather than hidden.
+    */
+    if (staff.role === "washer") {
+      return <Work board={{ ...board, windowFrom: from, windowTo: to }} worker={staff.name} />;
+    }
+
     const debts = buildDebts(orders);
 
     // Money is read from payments, so the two ranges are asked for separately.
