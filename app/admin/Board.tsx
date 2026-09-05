@@ -234,7 +234,7 @@ export function Board({
             href="/admin/pickups"
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
           >
-            The round
+            Pickups
           </Link>
           <Link
             href="/admin/revenue"

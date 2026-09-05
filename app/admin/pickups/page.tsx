@@ -1,17 +1,20 @@
 import { redirect } from "next/navigation";
 import { currentStaff } from "@/lib/admin-session";
+import { fetchOrders, buildRuns, defaultWindow, dueMinutes } from "@/lib/cleancloud";
 import { loadDay, loadRoutines, shopToday } from "@/lib/pickups";
-import { Round } from "./Round";
+import { Pickups, type DeliveryStop } from "./Pickups";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Salla — the round" };
+export const metadata = { title: "Salla — pickups" };
 
 /**
- * The day's collections and returns.
+ * The collections the shop schedules, and the deliveries it already owes.
  *
- * One day wide on purpose. The question this page answers is "what is left
- * before I go home", and a list that carries last week's errands cannot answer
- * it. Yesterday is a click away for anyone who needs to check.
+ * Only the collections are stored here. A delivery is an order in CleanCloud
+ * with a promised window already on it, and scheduling one here too would
+ * leave two systems each half-believing they own the same errand — so today's
+ * are read across and shown beside the pickups, in one list down the clock,
+ * without being copied.
  */
 export default async function PickupsPage({
   searchParams,
@@ -20,22 +23,47 @@ export default async function PickupsPage({
 }) {
   const staff = await currentStaff();
   if (!staff) redirect("/admin/login");
-  // The washer's work is in the shop; the round is not his.
   if (staff.role === "washer") redirect("/admin");
 
   const today = shopToday();
   const asked = (await searchParams).day;
   const day = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : today;
 
-  const [board, routines] = await Promise.all([loadDay(day), loadRoutines(today)]);
+  const { from, to } = defaultWindow();
+  const [board, routines, orders] = await Promise.all([
+    loadDay(day),
+    loadRoutines(today),
+    fetchOrders(from, to),
+  ]);
+
+  /*
+    Deliveries are only shown for the day being looked at, and only from the
+    runs CleanCloud already knows about. Nothing here writes back to them.
+  */
+  const deliveries: DeliveryStop[] = buildRuns(orders)
+    .filter((r) => r.day === day)
+    .flatMap((r) =>
+      r.stops.map((o) => ({
+        id: o.id,
+        customerID: o.customerID,
+        window: o.dueTimeLabel,
+        minutes: dueMinutes(o.dueTimeLabel),
+        cleaned: o.cleaned,
+        rack: o.rack,
+        pieces: o.pieces,
+        total: o.total,
+        paid: o.paid,
+      }))
+    );
 
   return (
-    <Round
+    <Pickups
       day={day}
       today={today}
-      jobs={board.data.jobs}
+      jobs={board.data.jobs.filter((j) => j.kind === "pickup")}
+      deliveries={deliveries}
       people={board.data.people}
-      routines={routines.data}
+      routines={routines.data.filter((r) => r.kind === "pickup")}
       staff={staff.name}
       role={staff.role === "owner" ? "owner" : "driver"}
       ready={board.ready}

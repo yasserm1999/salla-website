@@ -6,13 +6,13 @@ import {
   addRoutine,
   setJobStatus,
   stopRoutine,
-  type JobKind,
+  syncCustomers,
   type JobStatus,
 } from "@/lib/pickups";
+import { fetchOrders, defaultWindow } from "@/lib/cleancloud";
 
 export const dynamic = "force-dynamic";
 
-const KINDS: JobKind[] = ["pickup", "delivery"];
 const STATUSES: JobStatus[] = ["waiting", "out", "done", "missed"];
 
 /**
@@ -53,12 +53,12 @@ export async function POST(req: Request) {
 
   if (what === "job") {
     const personId = text(body?.personId, 60);
-    const kind = KINDS.includes(body?.kind) ? (body.kind as JobKind) : null;
     const onDate = day(body?.onDate);
-    if (!personId || !kind || !onDate) {
-      return NextResponse.json({ error: "Choose a customer, a kind and a day." }, { status: 400 });
+    if (!personId || !onDate) {
+      return NextResponse.json({ error: "Choose a customer and a day." }, { status: 400 });
     }
-    const res = await addJob({ personId, kind, onDate, atTime: clock(body?.atTime), note: text(body?.note) });
+    // Always a collection: deliveries are CleanCloud's and stay there.
+    const res = await addJob({ personId, kind: "pickup", onDate, atTime: clock(body?.atTime), note: text(body?.note) });
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
       : NextResponse.json({ error: res.error }, { status: 500 });
@@ -69,18 +69,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Only the shop sets up a repeat." }, { status: 403 });
     }
     const personId = text(body?.personId, 60);
-    const kind = KINDS.includes(body?.kind) ? (body.kind as JobKind) : null;
     const everyDays = Number(body?.everyDays);
     const startsOn = day(body?.startsOn);
-    if (!personId || !kind || !startsOn || !Number.isInteger(everyDays) || everyDays < 1 || everyDays > 180) {
+    if (!personId || !startsOn || !Number.isInteger(everyDays) || everyDays < 1 || everyDays > 180) {
       return NextResponse.json(
-        { error: "Choose a customer, a kind, a start day and an interval of 1 to 180 days." },
+        { error: "Choose a customer, a start day and an interval of 1 to 180 days." },
         { status: 400 }
       );
     }
     const res = await addRoutine({
       personId,
-      kind,
+      kind: "pickup",
       everyDays,
       atTime: clock(body?.atTime),
       startsOn,
@@ -111,6 +110,26 @@ export async function POST(req: Request) {
     const res = await setJobStatus({ id, status, reason: text(body?.reason), by: staff.name });
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
+      : NextResponse.json({ error: res.error }, { status: 500 });
+  }
+
+  if (what === "syncCustomers") {
+    /*
+      Reads every customer who has had an order and copies them into the book.
+      Slow the first time and nearly free afterwards, so it is a button rather
+      than something a page load waits for.
+    */
+    const { from, to } = defaultWindow();
+    const orders = await fetchOrders(from, to);
+    const res = await syncCustomers(orders.map((o) => o.customerID));
+    return res.ok
+      ? NextResponse.json({
+          success: true,
+          message:
+            res.added || res.updated
+              ? `${res.added} added, ${res.updated} updated.`
+              : "Already up to date.",
+        })
       : NextResponse.json({ error: res.error }, { status: 500 });
   }
 

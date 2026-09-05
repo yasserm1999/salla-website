@@ -196,7 +196,7 @@ export function Driver({
             href="/admin/pickups"
             className="rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 active:bg-sky-50"
           >
-            Collections
+            Pickups
           </a>
           <button
             onClick={() => router.refresh()}

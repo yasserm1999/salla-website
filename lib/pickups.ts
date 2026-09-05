@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import { shopYmd } from "./cleancloud";
+import { fetchCustomers, shopYmd } from "./cleancloud";
 
 /**
  * The errands that make orders, rather than the orders themselves.
@@ -16,8 +16,20 @@ import { shopYmd } from "./cleancloud";
  * are written out the first time that day is looked at, which is what lets a
  * routine's job and a one-off entered by hand be the same kind of thing by the
  * time the driver sees them.
+ *
+ * Only collections are kept here. A delivery is already an order in CleanCloud
+ * with a promised window on it, and scheduling one here as well would mean two
+ * systems each half-believing they own the same errand. Today's deliveries are
+ * read from CleanCloud and shown beside these, never stored.
  */
 
+/**
+ * Only ever a collection.
+ *
+ * The column still allows a delivery — rows exist from before this was
+ * settled, and dropping the distinction would rewrite history — but nothing
+ * new is created as one.
+ */
 export type JobKind = "pickup" | "delivery";
 export type JobStatus = "waiting" | "out" | "done" | "missed";
 
@@ -388,6 +400,74 @@ export async function setJobStatus(input: {
   const { error } = await db.from("salla_jobs").update(patch).eq("id", input.id);
   if (error) return fail(error);
   return { ok: true, message: "Saved." };
+}
+
+/**
+ * Fill the customer book from CleanCloud.
+ *
+ * CleanCloud can only be asked about a customer by id, so there is no way to
+ * search it by name or by number — which is the only way anybody looks
+ * somebody up at a counter. The answer is to keep a copy: every customer who
+ * has ever had an order is read once and written here, and from then on the
+ * search is instant and works offline of CleanCloud entirely.
+ *
+ * Slow the first time and nearly free afterwards, since the lookups are cached
+ * and only ids that are new to the book are asked for again.
+ */
+export async function syncCustomers(
+  ids: string[]
+): Promise<{ ok: true; added: number; updated: number } | { ok: false; error: string }> {
+  const db = client();
+  if (!db) return { ok: false, error: "Supabase is not configured." };
+
+  const { data: known, error } = await db
+    .from("salla_people")
+    .select("id, cleancloud_id, name, phone")
+    .not("cleancloud_id", "is", null);
+  if (error) return { ok: false, error: isMissingTable(error.code) ? missing : error.message };
+
+  const have = new Map((known ?? []).map((r) => [String(r.cleancloud_id), r]));
+  const wanted = [...new Set(ids.filter(Boolean))];
+
+  let added = 0;
+  let updated = 0;
+
+  /*
+    Forty at a time, which is what the lookup will do in one go before the
+    shop's rate limit starts refusing. Anything already in the book costs
+    nothing — fetchCustomers answers those from its own cache.
+  */
+  for (let i = 0; i < wanted.length; i += 40) {
+    const chunk = wanted.slice(i, i + 40);
+    const found = await fetchCustomers(chunk);
+
+    const fresh: { name: string; phone: string | null; address: string | null; cleancloud_id: string }[] = [];
+    for (const [id, brief] of found) {
+      if (!brief.name && !brief.tel) continue;
+      const existing = have.get(id);
+      if (!existing) {
+        fresh.push({
+          name: brief.name ?? `Customer ${id}`,
+          phone: brief.tel,
+          address: brief.place,
+          cleancloud_id: id,
+        });
+        added += 1;
+      } else if (
+        (brief.name && brief.name !== existing.name) ||
+        (brief.tel && brief.tel !== existing.phone)
+      ) {
+        await db
+          .from("salla_people")
+          .update({ name: brief.name ?? existing.name, phone: brief.tel ?? existing.phone })
+          .eq("id", existing.id);
+        updated += 1;
+      }
+    }
+    if (fresh.length > 0) await db.from("salla_people").insert(fresh);
+  }
+
+  return { ok: true, added, updated };
 }
 
 /** Today in the shop's own calendar, which is the only day this page means. */
