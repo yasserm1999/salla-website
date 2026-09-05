@@ -141,21 +141,40 @@ export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people:
   const due = (routines ?? []).filter((r) => fallsOn(r.starts_on, r.every_days, day));
   if (due.length > 0) {
     /*
-      Upsert rather than insert: the unique index on (routine, day) means a
-      second look at the same day changes nothing, so this is safe to run on
-      every page load and needs no lock.
+      Ask what is already there, then insert only what is not.
+
+      An upsert would be tidier, but the index that makes this safe is partial
+      — it only covers rows that came from a routine — and a partial index
+      cannot be named as a conflict target through PostgREST. It failed
+      silently, which is the worst way for it to fail: the page looked right
+      and the standing arrangements simply never appeared.
+
+      The index still earns its place. Two people opening the same day at the
+      same moment would both find nothing and both insert; the constraint
+      turns that race into one row and a harmless error rather than a
+      duplicated errand.
     */
-    await db.from("salla_jobs").upsert(
-      due.map((r) => ({
-        person_id: r.person_id,
-        routine_id: r.id,
-        kind: r.kind,
-        on_date: day,
-        at_time: r.at_time,
-        note: r.note,
-      })),
-      { onConflict: "routine_id,on_date", ignoreDuplicates: true }
-    );
+    const { data: already } = await db
+      .from("salla_jobs")
+      .select("routine_id")
+      .eq("on_date", day)
+      .not("routine_id", "is", null);
+
+    const have = new Set((already ?? []).map((r) => String(r.routine_id)));
+    const wanted = due.filter((r) => !have.has(String(r.id)));
+
+    if (wanted.length > 0) {
+      await db.from("salla_jobs").insert(
+        wanted.map((r) => ({
+          person_id: r.person_id,
+          routine_id: r.id,
+          kind: r.kind,
+          on_date: day,
+          at_time: r.at_time,
+          note: r.note,
+        }))
+      );
+    }
   }
 
   const [{ data: jobs, error: jobError }, { data: people }] = await Promise.all([
