@@ -192,6 +192,12 @@ export function Driver({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href="/admin/pickups"
+            className="rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 active:bg-sky-50"
+          >
+            Collections
+          </a>
           <button
             onClick={() => router.refresh()}
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] active:bg-[#f0e9df]"

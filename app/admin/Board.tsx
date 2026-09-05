@@ -231,6 +231,12 @@ export function Board({
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/admin/pickups"
+            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+          >
+            The round
+          </Link>
+          <Link
             href="/admin/revenue"
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
           >
