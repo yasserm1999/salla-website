@@ -222,7 +222,7 @@ export function Driver({
             {looking && <span className="ml-2 text-[#b8b1a8]">· loading names…</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href="/admin/pickups"
             className="rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 active:bg-sky-50"

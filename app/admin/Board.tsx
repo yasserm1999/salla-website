@@ -280,7 +280,7 @@ export function Board({
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-[#ece7e1] pb-4">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 border-b border-[#ece7e1] pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#26364d]">Shop dashboard</h1>
           <p className="text-sm text-[#8a9099]">
@@ -292,7 +292,7 @@ export function Board({
             {looking && <span className="ml-2 text-[#b8b1a8]">· fetching names…</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {news.length > 0 && (
             <button
               onClick={() => setShowNews((v) => !v)}
@@ -330,9 +330,9 @@ export function Board({
           </button>
           <button
             onClick={signOut}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-[#8a9099] hover:text-[#3f4f61]"
+            className="rounded-lg px-2 py-2 text-sm font-medium text-[#8a9099] hover:text-[#3f4f61]"
           >
-            Sign out ({admin})
+            Sign out<span className="hidden sm:inline"> ({admin})</span>
           </button>
         </div>
       </header>
