@@ -97,7 +97,14 @@ export async function POST(req: Request) {
     }
     const id = text(body?.id, 60);
     if (!id) return NextResponse.json({ error: "Which one?" }, { status: 400 });
-    const res = await stopRoutine(id);
+
+    // Same rule as a cancelled pickup, and for the same reason.
+    const why = text(body?.reason);
+    if (!why) {
+      return NextResponse.json({ error: "Stopping a repeat needs a reason." }, { status: 400 });
+    }
+
+    const res = await stopRoutine(id, why, staff.name);
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
       : NextResponse.json({ error: res.error }, { status: 500 });

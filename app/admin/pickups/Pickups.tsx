@@ -251,7 +251,13 @@ export function Pickups({
           <p className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
             Repeating pickups — {live.length}
           </p>
-          <RepeatList routines={routines} busy={busy} send={send} canStop={role === "owner"} />
+          <RepeatList
+            routines={routines}
+            busy={busy}
+            send={send}
+            canStop={role === "owner"}
+            onNeedReason={() => setError("Stopping a repeat needs a reason.")}
+          />
         </section>
       )}
 
@@ -492,6 +498,9 @@ function PersonPicker({
                 className="flex w-full items-baseline gap-2 px-3 py-2 text-left hover:bg-[#f8f1e7]"
               >
                 <span className="font-semibold text-[#26364d]">{p.name}</span>
+                {p.cleanCloudId && (
+                  <span className="font-mono text-[11px] text-[#b8b1a8]">c{p.cleanCloudId}</span>
+                )}
                 {p.phone && <span className="text-xs text-[#8a9099]">{p.phone}</span>}
                 {p.address && <span className="ms-auto truncate text-xs text-[#b8b1a8]">{p.address}</span>}
               </button>
@@ -726,11 +735,13 @@ function RepeatList({
   busy,
   send,
   canStop,
+  onNeedReason,
 }: {
   routines: Routine[];
   busy: string | null;
   send: Send;
   canStop: boolean;
+  onNeedReason: () => void;
 }) {
   const live = routines.filter((r) => r.active);
   return (
@@ -745,6 +756,11 @@ function RepeatList({
             <li key={r.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 text-sm">
               <span className="w-1 self-stretch bg-sky-500" />
               <span className="font-semibold text-[#26364d]">{r.person.name}</span>
+              {r.person.cleanCloudId && (
+                <span className="rounded bg-[#f0e9df] px-1.5 font-mono text-[11px] text-[#546d83]">
+                  c{r.person.cleanCloudId}
+                </span>
+              )}
               {r.person.phone && <span className="text-xs text-[#8a9099]">{r.person.phone}</span>}
               <span className="text-[#546d83]">
                 {repeatLabel(r.everyDays, r.nextDue)}
@@ -753,7 +769,17 @@ function RepeatList({
               <span className="text-xs font-semibold text-[#b8b1a8]">next {r.nextDue}</span>
               {canStop && (
                 <button
-                  onClick={() => send({ what: "stopRoutine", id: r.id }, r.id)}
+                  onClick={() => {
+                    const why = window.prompt(
+                      `Why is ${r.person.name}'s repeating pickup being stopped?`
+                    );
+                    if (why === null) return;
+                    if (!why.trim()) {
+                      onNeedReason();
+                      return;
+                    }
+                    void send({ what: "stopRoutine", id: r.id, reason: why.trim() }, r.id);
+                  }}
                   disabled={!!busy}
                   className="ms-auto text-xs font-bold uppercase tracking-wider text-[#b9925d] hover:underline disabled:opacity-50"
                 >

@@ -89,3 +89,13 @@ create index if not exists salla_jobs_day on salla_jobs (on_date);
 alter table salla_jobs enable row level security;
 
 notify pgrst, 'reload schema';
+
+
+-- Stopping a standing arrangement, and why.
+--
+-- A repeat that simply vanishes leaves nobody able to say whether the
+-- customer cancelled, moved, or was dropped by mistake.
+
+alter table salla_routines add column if not exists stopped_reason text;
+alter table salla_routines add column if not exists stopped_at timestamptz;
+alter table salla_routines add column if not exists stopped_by text;

@@ -48,6 +48,8 @@ export type Person = {
   phone: string | null;
   address: string | null;
   note: string | null;
+  /** Their number in CleanCloud, where the shop knows them by it. */
+  cleanCloudId: string | null;
 };
 
 export type Job = {
@@ -123,6 +125,7 @@ type PersonRow = {
   phone: string | null;
   address: string | null;
   note: string | null;
+  cleancloud_id?: string | null;
 };
 
 const toPerson = (r: PersonRow): Person => ({
@@ -131,6 +134,7 @@ const toPerson = (r: PersonRow): Person => ({
   phone: r.phone,
   address: r.address,
   note: r.note,
+  cleanCloudId: r.cleancloud_id ?? null,
 });
 
 /**
@@ -202,10 +206,10 @@ export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people:
     db
       .from("salla_jobs")
       .select(
-        "id, kind, status, at_time, on_date, note, reason, out_at, done_at, by_staff, routine_id, salla_people (id, name, phone, address, note)"
+        "id, kind, status, at_time, on_date, note, reason, out_at, done_at, by_staff, routine_id, salla_people (id, name, phone, address, note, cleancloud_id)"
       )
       .eq("on_date", day),
-    db.from("salla_people").select("id, name, phone, address, note").order("name"),
+    db.from("salla_people").select("id, name, phone, address, note, cleancloud_id").order("name"),
   ]);
 
   if (jobError) {
@@ -265,7 +269,7 @@ export async function loadRoutines(today: string): Promise<Store<Routine[]>> {
   const { data, error } = await db
     .from("salla_routines")
     .select(
-      "id, kind, every_days, at_time, starts_on, active, note, salla_people (id, name, phone, address, note)"
+      "id, kind, every_days, at_time, starts_on, active, note, salla_people (id, name, phone, address, note, cleancloud_id)"
     )
     .order("created_at", { ascending: false });
 
@@ -371,11 +375,25 @@ export async function addRoutine(input: {
   return { ok: true, message: `Repeating every ${input.everyDays} days.` };
 }
 
-export async function stopRoutine(id: string): Promise<Wrote> {
+export async function stopRoutine(id: string, reason: string, by: string): Promise<Wrote> {
   const db = client();
   if (!db) return { ok: false, error: "Supabase is not configured." };
-  // Kept rather than deleted: the jobs it already made still point at it.
-  const { error } = await db.from("salla_routines").update({ active: false }).eq("id", id);
+
+  /*
+    Kept rather than deleted: the jobs it already made still point at it, and
+    a repeat that simply vanishes leaves nobody able to say afterwards whether
+    the customer cancelled, moved, or was dropped by mistake.
+  */
+  const { error } = await db
+    .from("salla_routines")
+    .update({
+      active: false,
+      stopped_reason: reason,
+      stopped_at: new Date().toISOString(),
+      stopped_by: by,
+    })
+    .eq("id", id);
+
   if (error) return fail(error);
   return { ok: true, message: "Stopped. Days already on the board are untouched." };
 }
