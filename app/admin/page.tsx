@@ -19,6 +19,7 @@ import {
   deliveryConcerns,
   type StopState,
 } from "@/lib/delivery";
+import { loadDay } from "@/lib/pickups";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 import { Work } from "./Work";
@@ -56,12 +57,25 @@ export default async function AdminPage() {
       const states: Record<string, StopState> = {};
       for (const [id, p] of progress) states[id] = p.state;
 
+      const forDriver = await loadDay(today);
+
       return (
         <Driver
           runs={runs}
           driver={staff.name}
           today={today}
           states={states}
+          pickups={forDriver.data.jobs
+            .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
+            .map((j) => ({
+              id: j.id,
+              name: j.person.name,
+              phone: j.person.phone,
+              address: j.person.address,
+              atTime: j.atTime,
+              status: j.status,
+              note: j.note,
+            }))}
           storeReady={events.ready}
           storeProblem={events.ready ? null : events.reason}
         />
@@ -81,6 +95,14 @@ export default async function AdminPage() {
     }
 
     const debts = buildDebts(orders);
+
+    /*
+      Today's collections, planned alongside the deliveries.
+
+      The van goes out once. A schedule showing only half of what it has to
+      do is a schedule somebody has to hold the other half of in their head.
+    */
+    const pickupBoard = await loadDay(today);
 
     // Money is read from payments, so the two ranges are asked for separately.
     const [revenueToday, revenueMonth] = await Promise.all([
@@ -112,6 +134,19 @@ export default async function AdminPage() {
         summary={summary}
         admin={staff.name}
         delivery={delivery}
+        today={today}
+        pickups={pickupBoard.data.jobs
+          .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
+          .map((j) => ({
+            id: j.id,
+            name: j.person.name,
+            phone: j.person.phone,
+            address: j.person.address,
+            atTime: j.atTime,
+            status: j.status,
+            everyDays: j.everyDays,
+            note: j.note,
+          }))}
       />
     );
   } catch (e) {

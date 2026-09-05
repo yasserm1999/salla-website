@@ -6,6 +6,18 @@ import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
 
+/** A collection from the shop's own book, drawn beside the deliveries. */
+export type PickupRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  atTime: string | null;
+  status: string;
+  everyDays: number | null;
+  note: string | null;
+};
+
 export type DeliveryView = {
   status: RunStatus;
   concerns: Concern[];
@@ -124,6 +136,8 @@ export function Board({
   summary,
   admin,
   delivery,
+  pickups,
+  today,
 }: {
   board: BoardData;
   runs: Run[];
@@ -131,6 +145,9 @@ export function Board({
   summary: Summary;
   admin: string;
   delivery: DeliveryView;
+  pickups: PickupRow[];
+  /** The shop's own date, worked out on the server where the clock is known. */
+  today: string;
 }) {
   const router = useRouter();
   const s = summary;
@@ -475,10 +492,10 @@ export function Board({
                 className="overflow-hidden rounded-xl border border-violet-300 bg-violet-50"
               >
                 <Header
-                  count={runs.reduce((n, r) => n + r.stops.length, 0)}
+                  count={runs.reduce((n, r) => n + r.stops.length, 0) + pickups.length}
                   chip="bg-violet-600 text-white"
-                  title="Deliveries to plan"
-                  blurb="Only orders still in the shop. A stop whose washing is not finished is what keeps the van waiting."
+                  title="Deliveries and pickups to plan"
+                  blurb="Everything the van has to do: orders still in the shop, and the collections booked in."
                   value={runs.reduce((n, r) => n + r.value, 0)}
                   isOpen={!!open[slot]}
                   onClick={() => toggle(slot)}
@@ -522,6 +539,15 @@ export function Board({
                           copy that happened to be typed here.
                         */}
                         <ol className="divide-y divide-[#f0e9df] overflow-hidden rounded-lg border border-[#ece7e1]">
+                          {/*
+                            Collections join the day they belong to, in clock
+                            order with the deliveries rather than in a list of
+                            their own — the van does them on the same trip.
+                          */}
+                          {run.day === today &&
+                            pickups
+                              .filter((p) => beforeFirstStop(p, run.stops))
+                              .map((p) => <PickupLine key={p.id} pickup={p} />)}
                           {run.stops.map((o, i) => (
                             <li
                               key={o.id}
@@ -564,6 +590,10 @@ export function Board({
                               </div>
                             </li>
                           ))}
+                          {run.day === today &&
+                            pickups
+                              .filter((p) => !beforeFirstStop(p, run.stops))
+                              .map((p) => <PickupLine key={p.id} pickup={p} />)}
                         </ol>
                       </div>
                     ))}
@@ -876,6 +906,93 @@ function Tally({ n, label, tone }: { n: number; label: string; tone: string }) {
       <span className="text-lg font-black tabular-nums">{n}</span>{" "}
       <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
     </span>
+  );
+}
+
+/**
+ * Where a collection sits against the deliveries.
+ *
+ * Crude on purpose: it only asks whether the pickup is due before the last
+ * delivery of the run, which is enough to put it in the right half of a list
+ * that is never more than a dozen long. A pickup with no promised time goes
+ * last, since it can be fitted around whatever was promised.
+ */
+function beforeFirstStop(p: PickupRow, stops: Assessed[]): boolean {
+  const at = pickupMinutes(p.atTime);
+  if (at === null) return false;
+  const last = stops.reduce<number | null>((worst, s) => {
+    const m = windowStart(s.dueTimeLabel);
+    return m === null ? worst : worst === null || m > worst ? m : worst;
+  }, null);
+  return last === null || at <= last;
+}
+
+/** "7pm-8pm" or "5pm" as minutes past midnight, reading only the first half. */
+function windowStart(label: string | null): number | null {
+  if (!label) return null;
+  const m = label.split(/[-–]/)[0].trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!m) return null;
+  let hour = Number(m[1]) % 12;
+  if (m[3] && m[3].toLowerCase() === "pm") hour += 12;
+  else if (!m[3] && Number(m[1]) >= 13) hour = Number(m[1]);
+  return hour * 60 + Number(m[2] ?? 0);
+}
+
+function pickupMinutes(t: string | null): number | null {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** A collection, in sky, so it never reads as one of CleanCloud's stops. */
+function PickupLine({ pickup }: { pickup: PickupRow }) {
+  const time = pickupMinutes(pickup.atTime);
+  const label =
+    time === null
+      ? null
+      : `${((time / 60) % 12 === 0 ? 12 : Math.floor(time / 60) % 12)}:${String(time % 60).padStart(2, "0")}${time < 720 ? "am" : "pm"}`;
+
+  return (
+    <li className="flex items-start gap-2.5 bg-sky-50/50 px-3 py-2.5">
+      <span className="w-5 shrink-0 pt-1 text-xs font-bold text-sky-600">↑</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-base font-black text-[#26364d]">
+            {label ?? <span className="text-sm font-medium text-[#b8b1a8]">any time</span>}
+          </span>
+          <span className="truncate font-medium text-[#26364d]">{pickup.name}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="rounded bg-sky-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+            Collect
+          </span>
+          {pickup.status === "out" && (
+            <span className="rounded bg-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+              On the way
+            </span>
+          )}
+          {pickup.status === "done" && (
+            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+              ✓ Collected
+            </span>
+          )}
+          {pickup.status === "missed" && (
+            <span className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+              Not collected
+            </span>
+          )}
+          {pickup.phone && (
+            <a
+              href={`tel:${pickup.phone.replace(/[^\d+]/g, "")}`}
+              className="rounded border border-[#d8cbbd] px-1.5 py-0.5 text-[11px] font-semibold text-[#546d83]"
+            >
+              {pickup.phone}
+            </a>
+          )}
+        </div>
+        {pickup.address && <p className="mt-1 truncate text-xs text-[#8a9099]">{pickup.address}</p>}
+      </div>
+    </li>
   );
 }
 

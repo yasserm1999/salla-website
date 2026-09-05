@@ -12,8 +12,10 @@ import type { Job, Person, Routine } from "@/lib/pickups";
  * on the driver's own page; drawing them here as well only raised the question
  * of which screen was the real one.
  *
- * Three things happen here: a pickup is put on a day, a standing arrangement
- * is set up, and the day's collections are worked through.
+ * This page only ever arranges them. Marking one out and collected happens
+ * where the driver actually is — on his round, and on the shop board beside
+ * the deliveries — because a job that can be ticked off in two places will
+ * eventually be ticked off in one and missed in the other.
  */
 
 const clock = (t: string | null) => {
@@ -35,6 +37,28 @@ const dayName = (d: string) =>
 
 const shift = (d: string, by: number) =>
   new Date(Date.parse(`${d}T12:00:00Z`) + by * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * How a repeat is actually said out loud.
+ *
+ * Any interval that divides into weeks lands on the same weekday every
+ * time, and "every Saturday" is what somebody arranging a collection
+ * agreed to — the number of days is the arithmetic behind it, not the
+ * arrangement. Anything else has no weekday to name, so it stays a count.
+ */
+const ORDINALS = ["", "", "2nd ", "3rd ", "4th "];
+
+function repeatLabel(everyDays: number, anyDayItFalls: string): string {
+  const weeks = everyDays / 7;
+  if (!Number.isInteger(weeks) || weeks > 4) {
+    return everyDays === 1 ? "every day" : `every ${everyDays} days`;
+  }
+  const weekday = new Date(Date.parse(`${anyDayItFalls}T12:00:00Z`)).toLocaleDateString(
+    "en-GB",
+    { weekday: "long" }
+  );
+  return `every ${ORDINALS[weeks]}${weekday}`;
+}
 
 const minutesOf = (t: string | null) => {
   if (!t) return null;
@@ -67,7 +91,8 @@ export function Pickups({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"none" | "add" | "repeat">("none");
+  const [panel, setPanel] = useState<"none" | "add" | "repeat" | "repeats">("none");
+  const live = routines.filter((r) => r.active);
 
   async function send(body: Record<string, unknown>, key: string) {
     setBusy(key);
@@ -177,25 +202,38 @@ export function Pickups({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => setPanel(panel === "add" ? "none" : "add")}
-          className="rounded-lg bg-[#26364d] px-3 py-2 text-sm font-bold text-white hover:bg-[#3f4f61]"
-        >
-          Schedule a pickup
-        </button>
-        {role === "owner" && (
+        {/*
+          Each button is lit only while its own panel is open. The first was
+          drawn as the live one whatever was showing, which made the page look
+          as though it had not heard the click.
+        */}
+        {(
+          [
+            ["add", "Schedule a pickup"],
+            ["repeat", "Set up a repeat"],
+            ["repeats", `Repeating pickups (${live.length})`],
+          ] as const
+        ).map(([key, label]) => (
           <button
-            onClick={() => setPanel(panel === "repeat" ? "none" : "repeat")}
-            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-bold text-[#546d83] hover:border-[#d8b98a]"
+            key={key}
+            onClick={() => {
+              setPanel(panel === key ? "none" : key);
+              setError(null);
+            }}
+            className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+              panel === key
+                ? "bg-[#26364d] text-white"
+                : "border border-[#d8cbbd] text-[#546d83] hover:border-[#d8b98a]"
+            }`}
           >
-            Set up a repeat
+            {label}
           </button>
-        )}
+        ))}
         <button
           onClick={() => send({ what: "syncCustomers" }, "sync")}
           disabled={!!busy}
           className="ms-auto rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#8a9099] hover:border-[#d8b98a] disabled:opacity-50"
-          title="Copy the shop's customers across from CleanCloud so they can be searched"
+          title="Copy the shop&rsquo;s customers across from CleanCloud so they can be searched"
         >
           {busy === "sync" ? "Fetching customers…" : `Customers (${people.length})`}
         </button>
@@ -207,11 +245,19 @@ export function Pickups({
       {panel === "repeat" && (
         <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("none")} />
       )}
+      {panel === "repeats" && (
+        <section className="mb-4">
+          <p className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
+            Repeating pickups — {live.length}
+          </p>
+          <RepeatList routines={routines} busy={busy} send={send} canStop={role === "owner"} />
+        </section>
+      )}
 
       {/* ── The day, down the clock ─────────────────────────────────── */}
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
-          To collect — {open.length}
+          Booked in for this day — {open.length}
         </h2>
         {open.length === 0 ? (
           <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm font-semibold text-emerald-800">
@@ -251,13 +297,6 @@ export function Pickups({
         </section>
       )}
 
-      {/* ── The standing arrangements ───────────────────────────────── */}
-      <section>
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
-          Repeating pickups — {routines.filter((r) => r.active).length}
-        </h2>
-        <RepeatList routines={routines} busy={busy} send={send} canStop={role === "owner"} />
-      </section>
     </main>
   );
 }
@@ -294,7 +333,7 @@ function PickupCard({
           </span>
           {job.everyDays && (
             <span className="rounded bg-[#f0e9df] px-1.5 text-[11px] font-semibold text-[#546d83]">
-              every {job.everyDays}d
+              {repeatLabel(job.everyDays, job.onDate)}
             </span>
           )}
         </div>
@@ -344,16 +383,6 @@ function PickupCard({
           </a>
         )}
 
-        {job.status === "waiting" && (
-          <button
-            onClick={() => send({ what: "status", id: job.id, status: "out" }, job.id)}
-            disabled={!!busy}
-            className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61] disabled:opacity-50"
-          >
-            {busy === job.id ? "…" : "Out to collect"}
-          </button>
-        )}
-
         {/*
           Calling it off stays available until it is finished, and always
           costs a reason: a pickup that simply disappears from the day leaves
@@ -380,29 +409,6 @@ function PickupCard({
           >
             Cancel this pickup
           </button>
-        )}
-
-        {job.status === "out" && (
-          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-            <button
-              onClick={() => send({ what: "status", id: job.id, status: "done" }, job.id)}
-              disabled={!!busy}
-              className="rounded-lg bg-emerald-600 py-3 text-base font-black uppercase tracking-wider text-white active:bg-emerald-700 disabled:opacity-50"
-            >
-              {busy === job.id ? "…" : "Picked up"}
-            </button>
-            <button
-              onClick={() => {
-                const reason = window.prompt("What happened? (nobody in, no answer…)");
-                if (reason !== null)
-                  void send({ what: "status", id: job.id, status: "missed", reason: reason || "not collected" }, job.id);
-              }}
-              disabled={!!busy}
-              className="rounded-lg border-2 border-red-300 px-3 text-sm font-bold uppercase text-red-700 active:bg-red-50 disabled:opacity-50"
-            >
-              Could not
-            </button>
-          </div>
         )}
 
         {settled && (
@@ -729,7 +735,7 @@ function RepeatList({
               <span className="font-semibold text-[#26364d]">{r.person.name}</span>
               {r.person.phone && <span className="text-xs text-[#8a9099]">{r.person.phone}</span>}
               <span className="text-[#546d83]">
-                every {r.everyDays} day{r.everyDays === 1 ? "" : "s"}
+                {repeatLabel(r.everyDays, r.nextDue)}
                 {r.atTime ? ` at ${clock(r.atTime)}` : ""}
               </span>
               <span className="text-xs font-semibold text-[#b8b1a8]">next {r.nextDue}</span>

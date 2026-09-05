@@ -70,11 +70,23 @@ function dayName(day: string): string {
 /** "7pm-8pm" as it should be read: with a proper dash, and no shouting. */
 const timeWindow = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
 
+/** A collection from the shop's own book, to be done on the same trip. */
+export type PickupRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  atTime: string | null;
+  status: string;
+  note: string | null;
+};
+
 export function Driver({
   runs,
   driver,
   today: todayYmd,
   states,
+  pickups,
   storeReady,
   storeProblem,
 }: {
@@ -83,6 +95,7 @@ export function Driver({
   today: string;
   /** What the server already knows about each stop. */
   states: Record<string, StopState>;
+  pickups: PickupRow[];
   storeReady: boolean;
   storeProblem: string | null;
 }) {
@@ -169,6 +182,24 @@ export function Driver({
       .finally(() => setLooking(false));
   }, [runs]);
 
+  const [pickupBusy, setPickupBusy] = useState<string | null>(null);
+
+  async function markPickup(id: string, status: string, reason?: string) {
+    setPickupBusy(id);
+    try {
+      await fetch("/api/admin/pickups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ what: "status", id, status, reason }),
+      });
+      router.refresh();
+    } catch {
+      // The queue below is for deliveries; a collection is retried by hand.
+    } finally {
+      setPickupBusy(null);
+    }
+  }
+
   async function signOut() {
     await fetch("/api/admin", { method: "DELETE" });
     router.push("/admin/login");
@@ -253,6 +284,27 @@ export function Driver({
         </p>
       )}
 
+      {pickups.length > 0 && (
+        <section className="mb-6">
+          {/*
+            Collections lead the page. Nothing can be washed that has not been
+            fetched, and a collection missed today is an order that never
+            existed — which no later screen will ever show as late.
+          */}
+          <h2 className="mb-2.5 flex flex-wrap items-baseline gap-x-3 rounded-lg bg-sky-600 px-4 py-2.5 text-white">
+            <span className="text-xl font-black uppercase tracking-wide">To collect</span>
+            <span className="ml-auto text-sm font-bold">
+              {pickups.filter((p) => p.status === "waiting" || p.status === "out").length} left
+            </span>
+          </h2>
+          <div className="space-y-2.5">
+            {pickups.map((p) => (
+              <PickupCard key={p.id} pickup={p} onMark={markPickup} busy={pickupBusy} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {today && (
         <RunBlock run={today} people={people} highlight stateOf={stateOf} record={record} />
       )}
@@ -261,6 +313,112 @@ export function Driver({
         <RunBlock key={run.day} run={run} people={people} stateOf={stateOf} record={record} />
       ))}
     </main>
+  );
+}
+
+
+/** One collection, with the same two taps the deliveries use. */
+function PickupCard({
+  pickup,
+  onMark,
+  busy,
+}: {
+  pickup: PickupRow;
+  onMark: (id: string, status: string, reason?: string) => void;
+  busy: string | null;
+}) {
+  const time = pickup.atTime
+    ? (() => {
+        const [h, m] = pickup.atTime.split(":").map(Number);
+        const hour = h % 12 === 0 ? 12 : h % 12;
+        return `${hour}:${String(m).padStart(2, "0")}${h < 12 ? "am" : "pm"}`;
+      })()
+    : null;
+  const done = pickup.status === "done" || pickup.status === "missed";
+
+  return (
+    <article
+      className={`flex overflow-hidden rounded-xl border bg-white ${
+        done ? "border-sky-100 opacity-70" : "border-sky-300"
+      }`}
+    >
+      <span className="w-1.5 shrink-0 bg-sky-500" />
+      <div className="min-w-0 flex-1 px-4 py-3">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="rounded bg-sky-600 px-2 py-0.5 text-xs font-black uppercase tracking-wider text-white">
+            Collect
+          </span>
+          <span className="text-2xl font-black leading-none text-[#26364d]">
+            {time ?? <span className="text-base text-[#b8b1a8]">any time</span>}
+          </span>
+        </div>
+        <p className="mt-1.5 truncate text-lg font-bold leading-tight text-[#26364d]">
+          {pickup.name}
+        </p>
+        {pickup.address && (
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup.address)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1.5 block rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-[#3f4f61]"
+          >
+            {pickup.address}
+          </a>
+        )}
+        {pickup.note && <p className="mt-1 text-xs text-[#546d83]">{pickup.note}</p>}
+        {pickup.phone && (
+          <a
+            href={`tel:${pickup.phone.replace(/[^\d+]/g, "")}`}
+            className="mt-2 block rounded-lg border border-sky-600 px-3 py-2.5 text-center text-sm font-bold text-sky-700 active:bg-sky-50"
+          >
+            Call {pickup.phone}
+          </a>
+        )}
+
+        {pickup.status === "waiting" && (
+          <button
+            onClick={() => onMark(pickup.id, "out")}
+            disabled={!!busy}
+            className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61] disabled:opacity-50"
+          >
+            {busy === pickup.id ? "…" : "Out to collect"}
+          </button>
+        )}
+
+        {pickup.status === "out" && (
+          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+            <button
+              onClick={() => onMark(pickup.id, "done")}
+              disabled={!!busy}
+              className="rounded-lg bg-emerald-600 py-3 text-base font-black uppercase tracking-wider text-white active:bg-emerald-700 disabled:opacity-50"
+            >
+              {busy === pickup.id ? "…" : "Picked up"}
+            </button>
+            <button
+              onClick={() => {
+                const why = window.prompt("What happened? (nobody in, no answer…)");
+                if (why !== null) onMark(pickup.id, "missed", why || "not collected");
+              }}
+              disabled={!!busy}
+              className="rounded-lg border-2 border-red-300 px-3 text-sm font-bold uppercase text-red-700 active:bg-red-50 disabled:opacity-50"
+            >
+              Could not
+            </button>
+          </div>
+        )}
+
+        {pickup.status === "done" && (
+          <p className="mt-2 rounded-lg bg-emerald-50 py-2.5 text-center text-sm font-black uppercase tracking-wider text-emerald-700">
+            ✓ Picked up
+          </p>
+        )}
+        {pickup.status === "missed" && (
+          <p className="mt-2 rounded-lg bg-red-50 py-2.5 text-center text-sm font-black uppercase tracking-wider text-red-700">
+            Not collected
+          </p>
+        )}
+      </div>
+    </article>
   );
 }
 
