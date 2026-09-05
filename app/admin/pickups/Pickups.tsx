@@ -91,7 +91,7 @@ export function Pickups({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"booked" | "add" | "repeat" | "repeats">("booked");
+  const [panel, setPanel] = useState<"add" | "repeat" | "repeats" | "booked">("add");
   const live = routines.filter((r) => r.active);
 
   async function send(body: Record<string, unknown>, key: string) {
@@ -209,10 +209,10 @@ export function Pickups({
         */}
         {(
           [
-            ["booked", `Booked in (${open.length})`],
             ["add", "Schedule a pickup"],
             ["repeat", "Set up a repeat"],
             ["repeats", `Repeating pickups (${live.length})`],
+            ["booked", `Booked in (${open.length})`],
           ] as const
         ).map(([key, label]) => (
           <button
