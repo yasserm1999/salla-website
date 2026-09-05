@@ -91,7 +91,7 @@ export function Pickups({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"none" | "add" | "repeat" | "repeats">("none");
+  const [panel, setPanel] = useState<"booked" | "add" | "repeat" | "repeats">("booked");
   const live = routines.filter((r) => r.active);
 
   async function send(body: Record<string, unknown>, key: string) {
@@ -203,12 +203,13 @@ export function Pickups({
 
       <div className="mb-4 flex flex-wrap gap-2">
         {/*
-          Each button is lit only while its own panel is open. The first was
-          drawn as the live one whatever was showing, which made the page look
-          as though it had not heard the click.
+          One tab is always open, and it shows one thing. Panels used to leave
+          the day's list sitting underneath them, which read as part of
+          whatever was being arranged rather than as a separate answer.
         */}
         {(
           [
+            ["booked", `Booked in (${open.length})`],
             ["add", "Schedule a pickup"],
             ["repeat", "Set up a repeat"],
             ["repeats", `Repeating pickups (${live.length})`],
@@ -217,7 +218,7 @@ export function Pickups({
           <button
             key={key}
             onClick={() => {
-              setPanel(panel === key ? "none" : key);
+              setPanel(key);
               setError(null);
             }}
             className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
@@ -240,10 +241,10 @@ export function Pickups({
       </div>
 
       {panel === "add" && (
-        <AddPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("none")} />
+        <AddPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("booked")} />
       )}
       {panel === "repeat" && (
-        <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("none")} />
+        <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("booked")} />
       )}
       {panel === "repeats" && (
         <section className="mb-4">
@@ -255,14 +256,13 @@ export function Pickups({
       )}
 
       {/*
-        Only when nothing is being arranged.
+        What is on for the day, and what became of it.
 
-        With a panel open the page is in the middle of setting something up,
-        and the day's list below the form has nothing to do with it. Closing
-        the panel brings it back — which is also where a booked pickup is
-        called off.
+        A tab of its own because it is a different question from the three
+        arranging ones, and because this is where a booked pickup is called
+        off — the one thing on this page that changes an errand already made.
       */}
-      {panel === "none" && (
+      {panel === "booked" && (
         <>
           {/* ── The day, down the clock ─────────────────────────────────── */}
           <section className="mb-5">
