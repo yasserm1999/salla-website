@@ -31,7 +31,16 @@ import { fetchCustomers, shopYmd } from "./cleancloud";
  * new is created as one.
  */
 export type JobKind = "pickup" | "delivery";
-export type JobStatus = "waiting" | "out" | "done" | "missed";
+/**
+ * Where a pickup stands.
+ *
+ * "missed" and "cancelled" are deliberately different. Missed is a failed
+ * attempt — the driver went and nobody was in — and it says something about
+ * the round. Cancelled is the errand being called off, usually by the
+ * customer, and says nothing about anybody's driving. Rolling them together
+ * would make the shop look worse at collecting than it is.
+ */
+export type JobStatus = "waiting" | "out" | "done" | "missed" | "cancelled";
 
 export type Person = {
   id: string;
@@ -388,7 +397,11 @@ export async function setJobStatus(input: {
     // Going back out clears an earlier ending, so the row reads as one attempt.
     patch.done_at = null;
     patch.reason = null;
-  } else if (input.status === "done" || input.status === "missed") {
+  } else if (
+    input.status === "done" ||
+    input.status === "missed" ||
+    input.status === "cancelled"
+  ) {
     patch.done_at = now;
     patch.reason = input.reason?.trim() || null;
   } else {

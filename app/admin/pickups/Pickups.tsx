@@ -108,7 +108,7 @@ export function Pickups({
   });
 
   const open = inOrder.filter((j) => j.status === "waiting" || j.status === "out");
-  const settled = inOrder.filter((j) => j.status === "done" || j.status === "missed");
+  const settled = inOrder.filter((j) => j.status !== "waiting" && j.status !== "out");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-5">
@@ -220,7 +220,13 @@ export function Pickups({
         ) : (
           <div className="space-y-2.5">
             {open.map((job) => (
-              <PickupCard key={job.id} job={job} busy={busy} send={send} />
+              <PickupCard
+                key={job.id}
+                job={job}
+                busy={busy}
+                send={send}
+                onNeedReason={() => setError("A cancellation needs a reason.")}
+              />
             ))}
           </div>
         )}
@@ -229,11 +235,17 @@ export function Pickups({
       {settled.length > 0 && (
         <section className="mb-5">
           <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#8a9099]">
-            Collected — {settled.length}
+            Finished — {settled.length}
           </h2>
           <div className="space-y-2">
             {settled.map((j) => (
-              <PickupCard key={j.id} job={j} busy={busy} send={send} />
+              <PickupCard
+                key={j.id}
+                job={j}
+                busy={busy}
+                send={send}
+                onNeedReason={() => setError("A cancellation needs a reason.")}
+              />
             ))}
           </div>
         </section>
@@ -252,8 +264,18 @@ export function Pickups({
 
 type Send = (body: Record<string, unknown>, key: string) => Promise<boolean>;
 
-function PickupCard({ job, busy, send }: { job: Job; busy: string | null; send: Send }) {
-  const settled = job.status === "done" || job.status === "missed";
+function PickupCard({
+  job,
+  busy,
+  send,
+  onNeedReason,
+}: {
+  job: Job;
+  busy: string | null;
+  send: Send;
+  onNeedReason: () => void;
+}) {
+  const settled = job.status !== "waiting" && job.status !== "out";
 
   return (
     <article
@@ -306,6 +328,12 @@ function PickupCard({ job, busy, send }: { job: Job; busy: string | null; send: 
             Not collected — {job.reason ?? "no reason given"}
           </p>
         )}
+        {job.status === "cancelled" && (
+          <p className="mt-1.5 text-xs font-bold uppercase tracking-wider text-[#b9925d]">
+            Cancelled — {job.reason ?? "no reason given"}
+            {job.byStaff ? ` · ${job.byStaff}` : ""}
+          </p>
+        )}
 
         {job.person.phone && (
           <a
@@ -323,6 +351,34 @@ function PickupCard({ job, busy, send }: { job: Job; busy: string | null; send: 
             className="mt-2 w-full rounded-lg bg-[#26364d] py-3 text-base font-black uppercase tracking-wider text-white active:bg-[#3f4f61] disabled:opacity-50"
           >
             {busy === job.id ? "…" : "Out to collect"}
+          </button>
+        )}
+
+        {/*
+          Calling it off stays available until it is finished, and always
+          costs a reason: a pickup that simply disappears from the day leaves
+          nothing to ask anybody about afterwards.
+        */}
+        {(job.status === "waiting" || job.status === "out") && (
+          <button
+            onClick={() => {
+              const reason = window.prompt(
+                `Why is ${job.person.name}'s pickup being cancelled?`
+              );
+              if (reason === null) return;
+              if (!reason.trim()) {
+                onNeedReason();
+                return;
+              }
+              void send(
+                { what: "status", id: job.id, status: "cancelled", reason: reason.trim() },
+                job.id
+              );
+            }}
+            disabled={!!busy}
+            className="mt-2 w-full rounded-lg border border-[#d8cbbd] py-2 text-xs font-bold uppercase tracking-wider text-[#b9925d] hover:border-[#b9925d] disabled:opacity-50"
+          >
+            Cancel this pickup
           </button>
         )}
 

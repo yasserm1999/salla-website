@@ -13,7 +13,7 @@ import { fetchOrders, defaultWindow } from "@/lib/cleancloud";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES: JobStatus[] = ["waiting", "out", "done", "missed"];
+const STATUSES: JobStatus[] = ["waiting", "out", "done", "missed", "cancelled"];
 
 /**
  * The round, written to.
@@ -107,7 +107,18 @@ export async function POST(req: Request) {
     const id = text(body?.id, 60);
     const status = STATUSES.includes(body?.status) ? (body.status as JobStatus) : null;
     if (!id || !status) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
-    const res = await setJobStatus({ id, status, reason: text(body?.reason), by: staff.name });
+
+    const reason = text(body?.reason);
+    /*
+      Checked here and not only in the browser. A cancellation with no reason
+      is the one record nobody can reconstruct afterwards — the pickup simply
+      leaves the day and there is nothing left to ask anyone about.
+    */
+    if (status === "cancelled" && !reason) {
+      return NextResponse.json({ error: "A cancellation needs a reason." }, { status: 400 });
+    }
+
+    const res = await setJobStatus({ id, status, reason, by: staff.name });
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
       : NextResponse.json({ error: res.error }, { status: 500 });
