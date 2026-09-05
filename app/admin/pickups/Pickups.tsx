@@ -254,47 +254,59 @@ export function Pickups({
         </section>
       )}
 
-      {/* ── The day, down the clock ─────────────────────────────────── */}
-      <section className="mb-5">
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
-          Booked in for this day — {open.length}
-        </h2>
-        {open.length === 0 ? (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm font-semibold text-emerald-800">
-            {jobs.length === 0 ? "No pickups on for this day." : "All collected."}
-          </p>
-        ) : (
-          <div className="space-y-2.5">
-            {open.map((job) => (
-              <PickupCard
-                key={job.id}
-                job={job}
-                busy={busy}
-                send={send}
-                onNeedReason={() => setError("A cancellation needs a reason.")}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {/*
+        Only when nothing is being arranged.
 
-      {settled.length > 0 && (
-        <section className="mb-5">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#8a9099]">
-            Finished — {settled.length}
-          </h2>
-          <div className="space-y-2">
-            {settled.map((j) => (
-              <PickupCard
-                key={j.id}
-                job={j}
-                busy={busy}
-                send={send}
-                onNeedReason={() => setError("A cancellation needs a reason.")}
-              />
-            ))}
-          </div>
-        </section>
+        With a panel open the page is in the middle of setting something up,
+        and the day's list below the form has nothing to do with it. Closing
+        the panel brings it back — which is also where a booked pickup is
+        called off.
+      */}
+      {panel === "none" && (
+        <>
+          {/* ── The day, down the clock ─────────────────────────────────── */}
+          <section className="mb-5">
+            <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
+              Booked in for this day — {open.length}
+            </h2>
+            {open.length === 0 ? (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm font-semibold text-emerald-800">
+                {jobs.length === 0 ? "No pickups on for this day." : "All collected."}
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {open.map((job) => (
+                  <PickupCard
+                    key={job.id}
+                    job={job}
+                    busy={busy}
+                    send={send}
+                    onNeedReason={() => setError("A cancellation needs a reason.")}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {settled.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#8a9099]">
+                Finished — {settled.length}
+              </h2>
+              <div className="space-y-2">
+                {settled.map((j) => (
+                  <PickupCard
+                    key={j.id}
+                    job={j}
+                    busy={busy}
+                    send={send}
+                    onNeedReason={() => setError("A cancellation needs a reason.")}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
     </main>
