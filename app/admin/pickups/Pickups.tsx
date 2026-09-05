@@ -6,29 +6,15 @@ import { useRouter } from "next/navigation";
 import type { Job, Person, Routine } from "@/lib/pickups";
 
 /**
- * The day's collections, with the deliveries already owed shown beside them.
+ * The collections the shop schedules for itself.
  *
- * The shop schedules its own pickups; CleanCloud owns the deliveries. So only
- * one half of this page can be acted on — a pickup can be marked out and
- * collected here, a delivery is shown so the driver can plan around it and is
- * marked off where it lives, on his own deliveries page.
+ * Pickups and nothing else. Deliveries live in CleanCloud and are marked off
+ * on the driver's own page; drawing them here as well only raised the question
+ * of which screen was the real one.
  *
- * One list down the clock rather than two, because the driver leaves once and
- * does whatever is next. Sky is a collection, violet a delivery — the same
- * violet the delivery runs already use on the shop board.
+ * Three things happen here: a pickup is put on a day, a standing arrangement
+ * is set up, and the day's collections are worked through.
  */
-
-export type DeliveryStop = {
-  id: string;
-  customerID: string;
-  window: string | null;
-  minutes: number | null;
-  cleaned: boolean;
-  rack: string | null;
-  pieces: number;
-  total: number;
-  paid: boolean;
-};
 
 const clock = (t: string | null) => {
   if (!t) return null;
@@ -56,15 +42,10 @@ const minutesOf = (t: string | null) => {
   return h * 60 + m;
 };
 
-type Row =
-  | { sort: number | null; kind: "pickup"; job: Job }
-  | { sort: number | null; kind: "delivery"; stop: DeliveryStop };
-
 export function Pickups({
   day,
   today,
   jobs,
-  deliveries,
   people,
   routines,
   staff,
@@ -75,7 +56,6 @@ export function Pickups({
   day: string;
   today: string;
   jobs: Job[];
-  deliveries: DeliveryStop[];
   people: Person[];
   routines: Routine[];
   staff: string;
@@ -88,7 +68,6 @@ export function Pickups({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [panel, setPanel] = useState<"none" | "add" | "repeat">("none");
-  const [names, setNames] = useState<Record<string, string>>({});
 
   async function send(body: Record<string, unknown>, key: string) {
     setBusy(key);
@@ -115,40 +94,21 @@ export function Pickups({
     return false;
   }
 
-  // Delivery names come from the same lookup the rest of the admin uses.
-  useMemo(() => {
-    const ids = deliveries.map((d) => d.customerID).filter((id) => id && !(id in names));
-    if (ids.length === 0) return;
-    void fetch("/api/admin/customers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [...new Set(ids)].slice(0, 40) }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d?.people) return;
-        const next: Record<string, string> = {};
-        for (const [id, p] of Object.entries(d.people as Record<string, { name: string | null }>)) {
-          if (p.name) next[id] = p.name;
-        }
-        setNames((prev) => ({ ...prev, ...next }));
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliveries]);
-
-  const rows: Row[] = [
-    ...jobs.map((job) => ({ sort: minutesOf(job.atTime), kind: "pickup" as const, job })),
-    ...deliveries.map((stop) => ({ sort: stop.minutes, kind: "delivery" as const, stop })),
-  ].sort((a, b) => {
-    if (a.sort !== null && b.sort !== null && a.sort !== b.sort) return a.sort - b.sort;
-    if (a.sort !== null && b.sort === null) return -1;
-    if (a.sort === null && b.sort !== null) return 1;
-    return 0;
+  /*
+    Down the clock, with anything untimed last: a pickup with no promised hour
+    can be fitted around the ones that have.
+  */
+  const inOrder = [...jobs].sort((a, b) => {
+    const at = minutesOf(a.atTime);
+    const bt = minutesOf(b.atTime);
+    if (at !== null && bt !== null && at !== bt) return at - bt;
+    if (at !== null && bt === null) return -1;
+    if (at === null && bt !== null) return 1;
+    return a.person.name.localeCompare(b.person.name);
   });
 
-  const open = rows.filter((r) => r.kind === "delivery" || r.job.status === "waiting" || r.job.status === "out");
-  const settled = jobs.filter((j) => j.status === "done" || j.status === "missed");
+  const open = inOrder.filter((j) => j.status === "waiting" || j.status === "out");
+  const settled = inOrder.filter((j) => j.status === "done" || j.status === "missed");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-5">
@@ -210,13 +170,9 @@ export function Pickups({
         >
           →
         </Link>
-        <span className="ms-auto flex flex-wrap items-center gap-x-3 text-xs font-semibold">
-          <span className="flex items-center gap-1.5 text-sky-700">
-            <span className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> {jobs.length} to collect
-          </span>
-          <span className="flex items-center gap-1.5 text-violet-700">
-            <span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> {deliveries.length} to deliver
-          </span>
+        <span className="ms-auto flex items-center gap-1.5 text-xs font-semibold text-sky-700">
+          <span className="h-2.5 w-2.5 rounded-sm bg-sky-500" />
+          {jobs.length} pickup{jobs.length === 1 ? "" : "s"} this day
         </span>
       </div>
 
@@ -252,24 +208,20 @@ export function Pickups({
         <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("none")} />
       )}
 
-      {/* ── The day, both kinds, down the clock ─────────────────────── */}
+      {/* ── The day, down the clock ─────────────────────────────────── */}
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
-          The day — {open.length}
+          To collect — {open.length}
         </h2>
         {open.length === 0 ? (
           <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm font-semibold text-emerald-800">
-            {rows.length === 0 ? "Nothing on for this day." : "All done."}
+            {jobs.length === 0 ? "No pickups on for this day." : "All collected."}
           </p>
         ) : (
           <div className="space-y-2.5">
-            {open.map((r) =>
-              r.kind === "pickup" ? (
-                <PickupCard key={`p${r.job.id}`} job={r.job} busy={busy} send={send} />
-              ) : (
-                <DeliveryCard key={`d${r.stop.id}`} stop={r.stop} name={names[r.stop.customerID]} />
-              )
-            )}
+            {open.map((job) => (
+              <PickupCard key={job.id} job={job} busy={busy} send={send} />
+            ))}
           </div>
         )}
       </section>
@@ -406,64 +358,6 @@ function PickupCard({ job, busy, send }: { job: Job; busy: string | null; send: 
             Put it back on the list
           </button>
         )}
-      </div>
-    </article>
-  );
-}
-
-/**
- * A delivery, shown but not touchable.
- *
- * It belongs to CleanCloud and is marked off on the driver's own deliveries
- * page. Repeating the buttons here would mean two places to mark the same
- * thing, and sooner or later they would disagree.
- */
-function DeliveryCard({ stop, name }: { stop: DeliveryStop; name?: string }) {
-  return (
-    <article className="flex overflow-hidden rounded-xl border border-violet-200 bg-white">
-      <span className="w-1.5 shrink-0 bg-violet-500" />
-      <div className="min-w-0 flex-1 px-3.5 py-3">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-white">
-            Deliver
-          </span>
-          <span className="text-xl font-black leading-none text-[#26364d]">
-            {stop.window?.replace(/\s*-\s*/, "–") ?? (
-              <span className="text-base text-[#b8b1a8]">no time</span>
-            )}
-          </span>
-          <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">#{stop.id}</span>
-        </div>
-
-        <p className="mt-1 truncate text-lg font-bold leading-tight text-[#26364d]">
-          {name ?? `Customer ${stop.customerID}`}
-        </p>
-
-        <p className="mt-1 flex flex-wrap items-center gap-1.5">
-          {stop.cleaned ? (
-            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              Ready
-            </span>
-          ) : (
-            <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              Washing
-            </span>
-          )}
-          {stop.rack && (
-            <span className="rounded border border-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#26364d]">
-              Rack {stop.rack}
-            </span>
-          )}
-          {!stop.paid && stop.total > 0 && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
-              collect {stop.total.toFixed(2)}
-            </span>
-          )}
-        </p>
-
-        <p className="mt-1.5 text-xs text-[#b8b1a8]">
-          From CleanCloud — mark it off on the deliveries page.
-        </p>
       </div>
     </article>
   );
