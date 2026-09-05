@@ -99,3 +99,20 @@ notify pgrst, 'reload schema';
 alter table salla_routines add column if not exists stopped_reason text;
 alter table salla_routines add column if not exists stopped_at timestamptz;
 alter table salla_routines add column if not exists stopped_by text;
+
+
+-- Which orders the shop has already looked at.
+--
+-- A rising sales figure says something was sold; it does not say what. Every
+-- new order counts as unread until somebody has actually seen it, and then
+-- never again — this table is the "and then never again".
+create table if not exists salla_order_reviews (
+  order_id     text primary key,
+  reviewed_by  text not null,
+  reviewed_at  timestamptz not null default now()
+);
+
+create index if not exists salla_order_reviews_when on salla_order_reviews (reviewed_at);
+
+alter table salla_order_reviews enable row level security;
+

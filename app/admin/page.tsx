@@ -20,6 +20,7 @@ import {
   type StopState,
 } from "@/lib/delivery";
 import { loadDay } from "@/lib/pickups";
+import { loadSeen } from "@/lib/reviews";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 import { Work } from "./Work";
@@ -104,6 +105,26 @@ export default async function AdminPage() {
     */
     const pickupBoard = await loadDay(today);
 
+    /*
+      Orders nobody has read yet. Only the last few days count as news — an
+      order from a fortnight ago is history whether it was ticked or not.
+    */
+    const seen = await loadSeen();
+    const newsSince = shopYmd(new Date(Date.now() - 3 * 86_400_000));
+    const unread = orders
+      .filter((o) => o.createdAt && shopYmd(o.createdAt) >= newsSince)
+      .filter((o) => !seen.seen.has(o.id))
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      .slice(0, 60)
+      .map((o) => ({
+        id: o.id,
+        customerID: o.customerID,
+        total: o.total,
+        pieces: o.pieces,
+        summary: o.summary,
+        at: o.createdAt ? o.createdAt.toISOString() : null,
+      }));
+
     // Money is read from payments, so the two ranges are asked for separately.
     const [revenueToday, revenueMonth] = await Promise.all([
       fetchTakings(today, today),
@@ -135,6 +156,8 @@ export default async function AdminPage() {
         admin={staff.name}
         delivery={delivery}
         today={today}
+        unread={unread}
+        reviewsReady={seen.ready}
         pickups={pickupBoard.data.jobs
           .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
           .map((j) => ({

@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
 
+/** An order written up that nobody has read yet. */
+export type UnreadOrder = {
+  id: string;
+  customerID: string;
+  total: number;
+  pieces: number;
+  summary: string | null;
+  at: string | null;
+};
+
 /** A collection from the shop's own book, drawn beside the deliveries. */
 export type PickupRow = {
   id: string;
@@ -138,6 +148,8 @@ export function Board({
   delivery,
   pickups,
   today,
+  unread,
+  reviewsReady,
 }: {
   board: BoardData;
   runs: Run[];
@@ -148,6 +160,8 @@ export function Board({
   pickups: PickupRow[];
   /** The shop's own date, worked out on the server where the clock is known. */
   today: string;
+  unread: UnreadOrder[];
+  reviewsReady: boolean;
 }) {
   const router = useRouter();
   const s = summary;
@@ -157,6 +171,38 @@ export function Board({
     deliveries: true,
   });
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  /*
+    New orders are a notification, not a section.
+
+    They matter once — somebody reads the order and knows what was sold — and
+    then never again, so they live behind a badge that empties rather than in a
+    panel that has to be scrolled past every morning.
+  */
+  const [showNews, setShowNews] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [read, setRead] = useState<Set<string>>(new Set());
+  const news = unread.filter((o) => !read.has(o.id));
+
+  async function markRead(ids: string[]) {
+    if (ids.length === 0) return;
+    setReading(true);
+    // Cleared on screen at once; the server catches up behind.
+    setRead((prev) => new Set([...prev, ...ids]));
+    try {
+      const res = await fetch("/api/admin/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: ids }),
+      });
+      if (!res.ok) setRead((prev) => new Set([...prev].filter((x) => !ids.includes(x))));
+      else router.refresh();
+    } catch {
+      setRead((prev) => new Set([...prev].filter((x) => !ids.includes(x))));
+    } finally {
+      setReading(false);
+    }
+  }
 
   /*
     Names arrive after the board does.
@@ -247,6 +293,17 @@ export function Board({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {news.length > 0 && (
+            <button
+              onClick={() => setShowNews((v) => !v)}
+              className="relative rounded-lg border-2 border-[#d8b98a] bg-[#f8f1e7] px-3 py-2 text-sm font-bold text-[#b9925d] hover:border-[#b9925d]"
+            >
+              New orders
+              <span className="ms-1.5 rounded-full bg-[#b9925d] px-1.5 py-0.5 text-xs font-black text-white">
+                {news.length}
+              </span>
+            </button>
+          )}
           <Link
             href="/admin/pickups"
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
@@ -279,6 +336,75 @@ export function Board({
           </button>
         </div>
       </header>
+
+      {showNews && news.length > 0 && (
+        <section className="mb-5 overflow-hidden rounded-2xl border-2 border-[#d8b98a] bg-[#f8f1e7]">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+            <p className="text-sm font-bold uppercase tracking-widest text-[#b9925d]">
+              {news.length} order{news.length === 1 ? "" : "s"} you have not read
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => markRead(news.map((o) => o.id))}
+                disabled={reading || !reviewsReady}
+                className="rounded-lg bg-[#26364d] px-3 py-2 text-sm font-bold text-white hover:bg-[#3f4f61] disabled:opacity-50"
+              >
+                {reading ? "Saving…" : "Checked — clear all"}
+              </button>
+              <button
+                onClick={() => setShowNews(false)}
+                className="rounded-lg px-2 py-2 text-sm font-semibold text-[#8a9099] hover:text-[#26364d]"
+              >
+                hide
+              </button>
+            </div>
+          </div>
+
+          {!reviewsReady && (
+            <p className="border-t border-[#e6dccf] bg-amber-50 px-4 py-2 text-xs text-amber-900">
+              These cannot be cleared yet — the review table is missing.
+            </p>
+          )}
+
+          <ul className="divide-y divide-[#e6dccf] border-t border-[#e6dccf] bg-white/70">
+            {news.map((o) => (
+              <li key={o.id} className="flex items-start gap-2.5 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">
+                      #{o.id}
+                    </span>
+                    <span className="font-medium text-[#26364d]">
+                      {nameOf({ customerID: o.customerID })}
+                    </span>
+                    <span className="text-xs text-[#b8b1a8]">
+                      c{o.customerID}
+                      {o.at &&
+                        ` · ${new Date(o.at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`}
+                    </span>
+                  </p>
+                  <p className="truncate text-xs text-[#8a9099]">
+                    {o.summary || `${o.pieces} pieces`}
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-[#26364d]">
+                  {money(o.total)}
+                </span>
+                <button
+                  onClick={() => markRead([o.id])}
+                  disabled={reading || !reviewsReady}
+                  className="shrink-0 rounded border border-[#d8cbbd] px-2 py-1 text-xs font-bold text-[#546d83] hover:border-[#26364d] hover:text-[#26364d] disabled:opacity-40"
+                >
+                  Checked
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── Where the van is ───────────────────────────────────────── */}
       <OnTheRoad delivery={delivery} runs={runs} nameOf={nameOf} />
