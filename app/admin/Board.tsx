@@ -26,6 +26,9 @@ export type PickupRow = {
   status: string;
   everyDays: number | null;
   note: string | null;
+  /** When the driver said he was going, and when he had it. */
+  outAt: string | null;
+  doneAt: string | null;
 };
 
 export type DeliveryView = {
@@ -150,6 +153,7 @@ export function Board({
   today,
   unread,
   reviewsReady,
+  names,
 }: {
   board: BoardData;
   runs: Run[];
@@ -162,6 +166,8 @@ export function Board({
   today: string;
   unread: UnreadOrder[];
   reviewsReady: boolean;
+  /** Customer numbers to names, from the shop's own book. */
+  names: Record<string, string>;
 }) {
   const router = useRouter();
   const s = summary;
@@ -236,8 +242,16 @@ export function Board({
     }
   }, []);
 
+  /*
+    The shop's own book first, then anything the browser has since fetched,
+    then the number. Reading a name off the server is instant; the lookup is
+    only ever a fallback for somebody the book has not met yet.
+  */
   const nameOf = (o: { customerID: string; customerName?: string | null }) =>
-    people[o.customerID]?.name ?? o.customerName ?? `Customer ${o.customerID}`;
+    names[o.customerID] ??
+    people[o.customerID]?.name ??
+    o.customerName ??
+    `Customer ${o.customerID}`;
   const telOf = (o: { customerID: string; customerTel?: string | null }) =>
     people[o.customerID]?.tel ?? o.customerTel ?? null;
 
@@ -670,56 +684,55 @@ export function Board({
                             order with the deliveries rather than in a list of
                             their own — the van does them on the same trip.
                           */}
-                          {run.day === today &&
-                            pickups
-                              .filter((p) => beforeFirstStop(p, run.stops))
-                              .map((p) => <PickupLine key={p.id} pickup={p} />)}
-                          {run.stops.map((o, i) => (
-                            <li
-                              key={o.id}
-                              className="flex items-start gap-2.5 bg-white px-3 py-2.5 even:bg-[#fdfbf8]"
-                            >
+                          {drivingOrder(
+                            run.stops,
+                            run.day === today ? pickups : []
+                          ).map((item, i) =>
+                            item.kind === "pickup" ? (
+                              <PickupLine key={item.pickup.id} pickup={item.pickup} at={i + 1} />
+                            ) : (
+                              <li
+                                key={item.order.id}
+                                className="flex items-start gap-2.5 bg-white px-3 py-2.5"
+                              >
                               <span className="w-5 shrink-0 pt-1 text-xs font-bold text-violet-600">
                                 {i + 1}.
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-baseline gap-x-2">
                                   <span className="text-base font-black text-[#26364d]">
-                                    {o.dueTimeLabel?.replace(/s*-s*/, "–") ?? (
+                                    {item.order.dueTimeLabel?.replace(/\s*-\s*/, "–") ?? (
                                       <span className="text-sm font-medium text-[#b8b1a8]">
                                         no time
                                       </span>
                                     )}
                                   </span>
                                   <span className="truncate font-medium text-[#26364d]">
-                                    {nameOf(o)}
+                                    {nameOf(item.order)}
                                   </span>
-                                  <Tags customerID={o.customerID} orderID={o.id} />
+                                  <Tags customerID={item.order.customerID} orderID={item.order.id} />
                                 </div>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                  <DriverMark progress={delivery.states[o.id]} />
-                                  <StateBadges o={o} />
-                                  {telOf(o) && (
+                                  <StateBadges o={item.order} />
+                                  {telOf(item.order) && (
                                     <a
-                                      href={`tel:${telOf(o)!.replace(/[^d+]/g, "")}`}
+                                      href={`tel:${telOf(item.order)!.replace(/[^\d+]/g, "")}`}
                                       className="rounded border border-[#d8cbbd] px-1.5 py-0.5 text-[11px] font-semibold text-[#546d83] hover:border-[#546d83]"
                                     >
-                                      {telOf(o)}
+                                      {telOf(item.order)}
                                     </a>
                                   )}
-                                  {!o.paid && (
+                                  {!item.order.paid && (
                                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                                      collect {money(o.total)}
+                                      collect {money(item.order.total)}
                                     </span>
                                   )}
                                 </div>
                               </div>
-                            </li>
-                          ))}
-                          {run.day === today &&
-                            pickups
-                              .filter((p) => !beforeFirstStop(p, run.stops))
-                              .map((p) => <PickupLine key={p.id} pickup={p} />)}
+                                <DriverMark progress={delivery.states[item.order.id]} />
+                              </li>
+                            )
+                          )}
                         </ol>
                       </div>
                     ))}
@@ -998,30 +1011,30 @@ function OnTheRoad({
  * like a plan, not like a row of failures.
  */
 function DriverMark({ progress }: { progress?: StopProgress }) {
-  if (!progress || progress.state === "waiting") return null;
+  if (!progress || progress.state === "waiting") {
+    return (
+      <span className="w-24 shrink-0 self-center text-right text-[11px] font-semibold uppercase tracking-wider text-[#d8cbbd]">
+        In the shop
+      </span>
+    );
+  }
 
   const clock = (iso: string | null) =>
     iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
-  if (progress.state === "onTheWay") {
-    return (
-      <span className="rounded bg-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-        In the van · {clock(progress.leftAt)}
-      </span>
-    );
-  }
-
-  if (progress.state === "delivered") {
-    return (
-      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-        ✓ Delivered {clock(progress.settledAt)}
-      </span>
-    );
-  }
+  const look =
+    progress.state === "onTheWay"
+      ? { tint: "text-[#26364d]", word: "In the van", when: clock(progress.leftAt) }
+      : progress.state === "delivered"
+        ? { tint: "text-emerald-700", word: "✓ Delivered", when: clock(progress.settledAt) }
+        : { tint: "text-red-700", word: "Could not", when: progress.reason ?? "" };
 
   return (
-    <span className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-      Could not — {progress.reason ?? "no reason given"}
+    <span className="w-24 shrink-0 self-center text-right">
+      <span className={`block text-[11px] font-black uppercase tracking-wider ${look.tint}`}>
+        {look.word}
+      </span>
+      {look.when && <span className="block text-[11px] text-[#b8b1a8]">{look.when}</span>}
     </span>
   );
 }
@@ -1036,21 +1049,36 @@ function Tally({ n, label, tone }: { n: number; label: string; tone: string }) {
 }
 
 /**
- * Where a collection sits against the deliveries.
+ * Everything the van does on one day, in the order it does it.
  *
- * Crude on purpose: it only asks whether the pickup is due before the last
- * delivery of the run, which is enough to put it in the right half of a list
- * that is never more than a dozen long. A pickup with no promised time goes
- * last, since it can be fitted around whatever was promised.
+ * Collections and deliveries are the same kind of thing to a driver, so they
+ * are sorted together on the clock. A stop with no promised time goes last:
+ * it can be fitted around whatever was promised.
+ *
+ * This replaced a split that put pickups either wholly before or wholly after
+ * the deliveries, which is not sorting at all — a 7:45 collection sat above a
+ * 7pm delivery because it came before the last stop of the day.
  */
-function beforeFirstStop(p: PickupRow, stops: Assessed[]): boolean {
-  const at = pickupMinutes(p.atTime);
-  if (at === null) return false;
-  const last = stops.reduce<number | null>((worst, s) => {
-    const m = windowStart(s.dueTimeLabel);
-    return m === null ? worst : worst === null || m > worst ? m : worst;
-  }, null);
-  return last === null || at <= last;
+type Stop =
+  | { kind: "delivery"; at: number | null; order: Assessed }
+  | { kind: "pickup"; at: number | null; pickup: PickupRow };
+
+function drivingOrder(stops: Assessed[], pickups: PickupRow[]): Stop[] {
+  const items: Stop[] = [
+    ...stops.map(
+      (order): Stop => ({ kind: "delivery", at: windowStart(order.dueTimeLabel), order })
+    ),
+    ...pickups.map(
+      (pickup): Stop => ({ kind: "pickup", at: pickupMinutes(pickup.atTime), pickup })
+    ),
+  ];
+
+  return items.sort((a, x) => {
+    if (a.at !== null && x.at !== null && a.at !== x.at) return a.at - x.at;
+    if (a.at !== null && x.at === null) return -1;
+    if (a.at === null && x.at !== null) return 1;
+    return 0;
+  });
 }
 
 /** "7pm-8pm" or "5pm" as minutes past midnight, reading only the first half. */
@@ -1064,6 +1092,39 @@ function windowStart(label: string | null): number | null {
   return hour * 60 + Number(m[2] ?? 0);
 }
 
+/**
+ * Where a collection has got to, on the right of its row.
+ *
+ * Deliberately not another chip beside the rack and the phone: those are
+ * facts about the errand, and this is what became of it.
+ */
+function PickupMark({ pickup }: { pickup: PickupRow }) {
+  const look =
+    pickup.status === "out"
+      ? { tint: "text-[#26364d]", word: "On the way", when: pickup.outAt }
+      : pickup.status === "done"
+        ? { tint: "text-emerald-700", word: "✓ Collected", when: pickup.doneAt }
+        : pickup.status === "missed"
+          ? { tint: "text-red-700", word: "Not collected", when: pickup.doneAt }
+          : { tint: "text-[#d8cbbd]", word: "Not started", when: null };
+
+  return (
+    <span className="w-24 shrink-0 self-center text-right">
+      <span className={`block text-[11px] font-black uppercase tracking-wider ${look.tint}`}>
+        {look.word}
+      </span>
+      {look.when && (
+        <span className="block text-[11px] text-[#b8b1a8]">{stampOf(look.when)}</span>
+      )}
+    </span>
+  );
+}
+
+/** A stored moment as a clock time, for marks that need to say when. */
+function stampOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function pickupMinutes(t: string | null): number | null {
   if (!t) return null;
   const [h, m] = t.split(":").map(Number);
@@ -1071,7 +1132,7 @@ function pickupMinutes(t: string | null): number | null {
 }
 
 /** A collection, in sky, so it never reads as one of CleanCloud's stops. */
-function PickupLine({ pickup }: { pickup: PickupRow }) {
+function PickupLine({ pickup, at }: { pickup: PickupRow; at: number }) {
   const time = pickupMinutes(pickup.atTime);
   const label =
     time === null
@@ -1080,7 +1141,7 @@ function PickupLine({ pickup }: { pickup: PickupRow }) {
 
   return (
     <li className="flex items-start gap-2.5 bg-sky-50/50 px-3 py-2.5">
-      <span className="w-5 shrink-0 pt-1 text-xs font-bold text-sky-600">↑</span>
+      <span className="w-5 shrink-0 pt-1 text-xs font-bold text-sky-600">{at}.</span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-base font-black text-[#26364d]">
@@ -1092,21 +1153,7 @@ function PickupLine({ pickup }: { pickup: PickupRow }) {
           <span className="rounded bg-sky-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
             Collect
           </span>
-          {pickup.status === "out" && (
-            <span className="rounded bg-[#26364d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              On the way
-            </span>
-          )}
-          {pickup.status === "done" && (
-            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              ✓ Collected
-            </span>
-          )}
-          {pickup.status === "missed" && (
-            <span className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-              Not collected
-            </span>
-          )}
+
           {pickup.phone && (
             <a
               href={`tel:${pickup.phone.replace(/[^\d+]/g, "")}`}
@@ -1118,6 +1165,7 @@ function PickupLine({ pickup }: { pickup: PickupRow }) {
         </div>
         {pickup.address && <p className="mt-1 truncate text-xs text-[#8a9099]">{pickup.address}</p>}
       </div>
+      <PickupMark pickup={pickup} />
     </li>
   );
 }

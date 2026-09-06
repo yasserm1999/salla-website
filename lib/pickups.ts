@@ -501,6 +501,28 @@ export async function syncCustomers(
   return { ok: true, added, updated };
 }
 
+/**
+ * Every customer the shop can name without asking CleanCloud.
+ *
+ * The book was copied across once, so a name is a lookup in the shop's own
+ * database rather than a rate-limited request per customer. Anyone not in it
+ * still falls back to the slow path in the browser.
+ */
+export async function knownNames(): Promise<Record<string, string>> {
+  const db = client();
+  if (!db) return {};
+
+  const { data, error } = await db
+    .from("salla_people")
+    .select("cleancloud_id, name")
+    .not("cleancloud_id", "is", null);
+
+  if (error) return {};
+  const out: Record<string, string> = {};
+  for (const r of data ?? []) out[String(r.cleancloud_id)] = String(r.name);
+  return out;
+}
+
 /** Today in the shop's own calendar, which is the only day this page means. */
 export function shopToday(): string {
   return shopYmd(new Date());

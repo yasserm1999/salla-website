@@ -21,6 +21,7 @@ import {
 } from "@/lib/delivery";
 import { loadDay } from "@/lib/pickups";
 import { loadSeen } from "@/lib/reviews";
+import { knownNames } from "@/lib/pickups";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 import { Work } from "./Work";
@@ -110,6 +111,7 @@ export default async function AdminPage() {
       order from a fortnight ago is history whether it was ticked or not.
     */
     const seen = await loadSeen();
+    const names = await knownNames();
     const newsSince = shopYmd(new Date(Date.now() - 3 * 86_400_000));
     const unread = orders
       .filter((o) => o.createdAt && shopYmd(o.createdAt) >= newsSince)
@@ -158,6 +160,7 @@ export default async function AdminPage() {
         today={today}
         unread={unread}
         reviewsReady={seen.ready}
+        names={names}
         pickups={pickupBoard.data.jobs
           .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
           .map((j) => ({
@@ -169,6 +172,8 @@ export default async function AdminPage() {
             status: j.status,
             everyDays: j.everyDays,
             note: j.note,
+            outAt: j.outAt,
+            doneAt: j.doneAt,
           }))}
       />
     );

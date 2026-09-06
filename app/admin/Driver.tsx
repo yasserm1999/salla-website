@@ -68,7 +68,7 @@ function dayName(day: string): string {
 }
 
 /** "7pm-8pm" as it should be read: with a proper dash, and no shouting. */
-const timeWindow = (label: string | null) => (label ? label.replace(/s*-s*/, "–") : null);
+const timeWindow = (label: string | null) => (label ? label.replace(/\s*-\s*/, "–") : null);
 
 /** A collection from the shop's own book, to be done on the same trip. */
 export type PickupRow = {
