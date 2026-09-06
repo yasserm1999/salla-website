@@ -502,6 +502,38 @@ export async function syncCustomers(
 }
 
 /**
+ * Keep what a lookup just learned.
+ *
+ * Called from the name endpoint and deliberately not awaited by it: the names
+ * are already on their way back to the browser, and filling the book is a
+ * side errand that must not make anybody wait.
+ */
+export async function rememberCustomers(
+  found: Map<string, { name: string | null; tel: string | null; place: string | null }>
+): Promise<void> {
+  const db = client();
+  if (!db || found.size === 0) return;
+
+  const ids = [...found.keys()];
+  const { data: already } = await db
+    .from("salla_people")
+    .select("cleancloud_id")
+    .in("cleancloud_id", ids);
+
+  const have = new Set((already ?? []).map((r) => String(r.cleancloud_id)));
+  const fresh = [...found.entries()]
+    .filter(([id, brief]) => !have.has(id) && (brief.name || brief.tel))
+    .map(([id, brief]) => ({
+      name: brief.name ?? `Customer ${id}`,
+      phone: brief.tel,
+      address: brief.place,
+      cleancloud_id: id,
+    }));
+
+  if (fresh.length > 0) await db.from("salla_people").insert(fresh);
+}
+
+/**
  * Every customer the shop can name without asking CleanCloud.
  *
  * The book was copied across once, so a name is a lookup in the shop's own

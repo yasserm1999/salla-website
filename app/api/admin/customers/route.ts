@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentAdmin } from "@/lib/admin-session";
 import { fetchCustomers } from "@/lib/cleancloud";
+import { rememberCustomers } from "@/lib/pickups";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,15 @@ export async function POST(req: Request) {
   if (ids.length === 0) return NextResponse.json({ people: {} });
 
   const found = await fetchCustomers(ids);
+
+  /*
+    Whatever is learned here is written into the shop's own book, so the next
+    page load names them from the database instead of asking CleanCloud again.
+    The book fills itself as new customers appear rather than only when
+    somebody remembers to press the sync button.
+  */
+  void rememberCustomers(found);
+
   return NextResponse.json({
     people: Object.fromEntries(
       [...found.entries()].map(([id, b]) => [id, { name: b.name, tel: b.tel, place: b.place }])

@@ -264,10 +264,23 @@ export function Board({
       else if (slot === "debts") showing.push(...debts.rows);
       else showing.push(...board.groups[slot as Urgency]);
     }
-    const missing = showing.map((o) => o.customerID).filter((id) => id && !(id in people));
+
+    /*
+      The new-orders list too, whether or not it is open.
+
+      A customer who has just placed their first order cannot be in the shop's
+      own book yet, and that first order is precisely the one being read — so
+      it is the worst possible place to show a number instead of a name.
+    */
+    showing.push(...unread);
+    showing.push(...runs.flatMap((r) => r.stops));
+
+    const missing = showing
+      .map((o) => o.customerID)
+      .filter((id) => id && !(id in people) && !(id in names));
     if (missing.length > 0) void lookUp(missing.slice(0, 60));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, board, runs, debts]);
+  }, [open, board, runs, debts, unread]);
 
   /*
     While there is a round out, the page keeps itself current.
