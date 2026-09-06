@@ -1010,33 +1010,54 @@ function OnTheRoad({
  * Nothing is drawn until he touches it: a round he has not started should look
  * like a plan, not like a row of failures.
  */
+/** The one thing on a row that changes through the evening, drawn to say so. */
+function Mark({
+  word,
+  when,
+  tone,
+}: {
+  word: string;
+  when: string | null;
+  tone: "resting" | "moving" | "done" | "failed";
+}) {
+  const skin = {
+    resting: "border border-dashed border-[#d8cbbd] bg-transparent text-[#b8b1a8]",
+    moving: "bg-[#26364d] text-white",
+    done: "bg-emerald-600 text-white",
+    failed: "bg-red-600 text-white",
+  }[tone];
+
+  return (
+    <span className="w-[6.5rem] shrink-0 self-center">
+      <span
+        className={`block rounded-lg px-2 py-1.5 text-center text-[11px] font-black uppercase leading-tight tracking-wider ${skin}`}
+      >
+        {word}
+      </span>
+      {when && (
+        <span className="mt-0.5 block text-center text-[11px] font-semibold text-[#8a9099]">
+          {when}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function DriverMark({ progress }: { progress?: StopProgress }) {
   if (!progress || progress.state === "waiting") {
-    return (
-      <span className="w-24 shrink-0 self-center text-right text-[11px] font-semibold uppercase tracking-wider text-[#d8cbbd]">
-        In the shop
-      </span>
-    );
+    return <Mark word="In the shop" when={null} tone="resting" />;
   }
 
   const clock = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
 
-  const look =
-    progress.state === "onTheWay"
-      ? { tint: "text-[#26364d]", word: "In the van", when: clock(progress.leftAt) }
-      : progress.state === "delivered"
-        ? { tint: "text-emerald-700", word: "✓ Delivered", when: clock(progress.settledAt) }
-        : { tint: "text-red-700", word: "Could not", when: progress.reason ?? "" };
-
-  return (
-    <span className="w-24 shrink-0 self-center text-right">
-      <span className={`block text-[11px] font-black uppercase tracking-wider ${look.tint}`}>
-        {look.word}
-      </span>
-      {look.when && <span className="block text-[11px] text-[#b8b1a8]">{look.when}</span>}
-    </span>
-  );
+  if (progress.state === "onTheWay") {
+    return <Mark word="In the van" when={clock(progress.leftAt)} tone="moving" />;
+  }
+  if (progress.state === "delivered") {
+    return <Mark word="✓ Delivered" when={clock(progress.settledAt)} tone="done" />;
+  }
+  return <Mark word="Could not" when={progress.reason} tone="failed" />;
 }
 
 function Tally({ n, label, tone }: { n: number; label: string; tone: string }) {
@@ -1098,26 +1119,23 @@ function windowStart(label: string | null): number | null {
  * Deliberately not another chip beside the rack and the phone: those are
  * facts about the errand, and this is what became of it.
  */
+/**
+ * Where a collection has got to, on the right of its row.
+ *
+ * Deliberately not another chip beside the rack and the phone: those are
+ * facts about the errand, and this is what became of it.
+ */
 function PickupMark({ pickup }: { pickup: PickupRow }) {
-  const look =
-    pickup.status === "out"
-      ? { tint: "text-[#26364d]", word: "On the way", when: pickup.outAt }
-      : pickup.status === "done"
-        ? { tint: "text-emerald-700", word: "✓ Collected", when: pickup.doneAt }
-        : pickup.status === "missed"
-          ? { tint: "text-red-700", word: "Not collected", when: pickup.doneAt }
-          : { tint: "text-[#d8cbbd]", word: "Not started", when: null };
-
-  return (
-    <span className="w-24 shrink-0 self-center text-right">
-      <span className={`block text-[11px] font-black uppercase tracking-wider ${look.tint}`}>
-        {look.word}
-      </span>
-      {look.when && (
-        <span className="block text-[11px] text-[#b8b1a8]">{stampOf(look.when)}</span>
-      )}
-    </span>
-  );
+  if (pickup.status === "out") {
+    return <Mark word="On the way" when={pickup.outAt ? stampOf(pickup.outAt) : null} tone="moving" />;
+  }
+  if (pickup.status === "done") {
+    return <Mark word="✓ Collected" when={pickup.doneAt ? stampOf(pickup.doneAt) : null} tone="done" />;
+  }
+  if (pickup.status === "missed") {
+    return <Mark word="Not collected" when={pickup.doneAt ? stampOf(pickup.doneAt) : null} tone="failed" />;
+  }
+  return <Mark word="Not started" when={null} tone="resting" />;
 }
 
 /** A stored moment as a clock time, for marks that need to say when. */
