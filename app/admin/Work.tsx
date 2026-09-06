@@ -129,7 +129,13 @@ export function Work({
             })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/admin/issues"
+            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-bold text-[#546d83] hover:border-[#d8b98a]"
+          >
+            Report
+          </a>
           <button
             onClick={() => router.refresh()}
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
