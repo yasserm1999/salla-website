@@ -154,6 +154,7 @@ export function Board({
   unread,
   reviewsReady,
   names,
+  role,
 }: {
   board: BoardData;
   runs: Run[];
@@ -166,6 +167,11 @@ export function Board({
   today: string;
   unread: UnreadOrder[];
   reviewsReady: boolean;
+  /**
+   * Whose board this is. A manager gets the whole day and none of the books:
+   * the difference is not a hidden section but a section never sent.
+   */
+  role: "owner" | "manager";
   /** Customer numbers to names, from the shop's own book. */
   names: Record<string, string>;
 }) {
@@ -189,6 +195,7 @@ export function Board({
   const [reading, setReading] = useState(false);
   const [read, setRead] = useState<Set<string>>(new Set());
   const news = unread.filter((o) => !read.has(o.id));
+  const books = role === "owner";
 
   async function markRead(ids: string[]) {
     if (ids.length === 0) return;
@@ -320,7 +327,7 @@ export function Board({
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          {news.length > 0 && (
+          {books && news.length > 0 && (
             <button
               onClick={() => setShowNews((v) => !v)}
               className="relative rounded-lg border-2 border-[#d8b98a] bg-[#f8f1e7] px-3 py-2 text-sm font-bold text-[#b9925d] hover:border-[#b9925d]"
@@ -343,18 +350,22 @@ export function Board({
           >
             Pickups
           </Link>
-          <Link
-            href="/admin/revenue"
-            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
-          >
-            Revenue
-          </Link>
-          <Link
-            href="/admin/customers"
-            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
-          >
-            Customers
-          </Link>
+          {books && (
+            <>
+              <Link
+                href="/admin/revenue"
+                className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+              >
+                Revenue
+              </Link>
+              <Link
+                href="/admin/customers"
+                className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+              >
+                Customers
+              </Link>
+            </>
+          )}
           <button
             onClick={() => router.refresh()}
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
@@ -370,7 +381,7 @@ export function Board({
         </div>
       </header>
 
-      {showNews && news.length > 0 && (
+      {books && showNews && news.length > 0 && (
         <section className="mb-5 overflow-hidden rounded-2xl border-2 border-[#d8b98a] bg-[#f8f1e7]">
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
             <p className="text-sm font-bold uppercase tracking-widest text-[#b9925d]">
@@ -452,7 +463,7 @@ export function Board({
       */}
 
       {/* ── Today's trade ─────────────────────────────────────────── */}
-      <section className="mb-3 grid gap-3 sm:grid-cols-3">
+      <section className={`mb-3 grid gap-3 ${books ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
           <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">Sold today</p>
           <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
@@ -468,24 +479,26 @@ export function Board({
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">
-            Sold this month
-          </p>
-          <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
-            {money(s.salesMonth.amount)}
-          </p>
-          <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
-            {s.salesMonth.count} order{s.salesMonth.count === 1 ? "" : "s"} this month
-          </p>
-          <p className="mt-1.5 border-t border-[#f0e9df] pt-1.5 text-xs text-[#8a9099]">
-            Same point last month{" "}
-            <span className="font-bold text-[#546d83]">
-              {money(s.salesLastMonthToDate.amount)}
-            </span>{" "}
-            <Delta now={s.salesMonth.amount} then={s.salesLastMonthToDate.amount} />
-          </p>
-        </div>
+        {books && (
+          <div className="rounded-2xl border-2 border-[#26364d] bg-white px-5 py-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">
+              Sold this month
+            </p>
+            <p className="mt-1 text-5xl font-black leading-none tracking-tight text-[#26364d]">
+              {money(s.salesMonth.amount)}
+            </p>
+            <p className="mt-1.5 text-sm font-medium text-[#8a9099]">
+              {s.salesMonth.count} order{s.salesMonth.count === 1 ? "" : "s"} this month
+            </p>
+            <p className="mt-1.5 border-t border-[#f0e9df] pt-1.5 text-xs text-[#8a9099]">
+              Same point last month{" "}
+              <span className="font-bold text-[#546d83]">
+                {money(s.salesLastMonthToDate.amount)}
+              </span>{" "}
+              <Delta now={s.salesMonth.amount} then={s.salesLastMonthToDate.amount} />
+            </p>
+          </div>
+        )}
 
         <div className="rounded-2xl border-2 border-[#d8cbbd] bg-white px-5 py-4">
           <p className="text-xs font-bold uppercase tracking-widest text-[#8a9099]">
@@ -502,59 +515,63 @@ export function Board({
 
 
       {/*
-        What the month leaves behind.
+        What the month leaves behind, and who it is for.
 
         Carpets are sold by the shop but washed by somebody else, so part of
         the sales figure above was never the shop's to keep. The subtraction is
-        shown rather than hidden so the net is auditable at a glance.
+        shown rather than hidden so the net is auditable at a glance — and it
+        is shown only to the owners, because it is a book figure and running
+        the shop does not turn on it.
       */}
-      <section className="mb-6 rounded-2xl border-2 border-[#26364d] bg-[#26364d] px-5 py-4 text-white">
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-          <div>
-            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-[#b8b1a8]">
-              Sold this month
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-[#ece7e1]">
-              {money(s.salesMonth.amount)}
-            </p>
+      {books && (
+        <section className="mb-6 rounded-2xl border-2 border-[#26364d] bg-[#26364d] px-5 py-4 text-white">
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p className="text-[0.68rem] font-bold uppercase tracking-widest text-[#b8b1a8]">
+                Sold this month
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-[#ece7e1]">
+                {money(s.salesMonth.amount)}
+              </p>
+            </div>
+
+            <div className="pb-1 text-2xl font-light text-[#8a9099]">−</div>
+
+            <div>
+              <p className="text-[0.68rem] font-bold uppercase tracking-widest text-rose-300">
+                Carpet contractor
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-rose-300">
+                {money(s.carpetsMonth.cost)}
+              </p>
+            </div>
+
+            <div className="pb-1 text-2xl font-light text-[#8a9099]">=</div>
+
+            <div>
+              <p className="text-[0.68rem] font-bold uppercase tracking-widest text-emerald-300">
+                Net to the shop
+              </p>
+              <p className="text-4xl font-black tabular-nums leading-none text-emerald-300">
+                {money(s.netSalesMonth)}
+              </p>
+            </div>
           </div>
 
-          <div className="pb-1 text-2xl font-light text-[#8a9099]">−</div>
-
-          <div>
-            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-rose-300">
-              Carpet contractor
+          {s.carpetsMonth.lines.length > 0 ? (
+            <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
+              {s.carpetsMonth.metres.toFixed(2)} m² out to the contractor ·{" "}
+              {s.carpetsMonth.lines
+                .map((l) => `${l.label} ${l.metres.toFixed(2)} m² = ${money(l.cost)}`)
+                .join(" · ")}
             </p>
-            <p className="text-2xl font-bold tabular-nums text-rose-300">
-              {money(s.carpetsMonth.cost)}
+          ) : (
+            <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
+              No carpets sold this month.
             </p>
-          </div>
-
-          <div className="pb-1 text-2xl font-light text-[#8a9099]">=</div>
-
-          <div>
-            <p className="text-[0.68rem] font-bold uppercase tracking-widest text-emerald-300">
-              Net to the shop
-            </p>
-            <p className="text-4xl font-black tabular-nums leading-none text-emerald-300">
-              {money(s.netSalesMonth)}
-            </p>
-          </div>
-        </div>
-
-        {s.carpetsMonth.lines.length > 0 ? (
-          <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
-            {s.carpetsMonth.metres.toFixed(2)} m² out to the contractor ·{" "}
-            {s.carpetsMonth.lines
-              .map((l) => `${l.label} ${l.metres.toFixed(2)} m² = ${money(l.cost)}`)
-              .join(" · ")}
-          </p>
-        ) : (
-          <p className="mt-3 border-t border-[#46586f] pt-2.5 text-xs text-[#b8b1a8]">
-            No carpets sold this month.
-          </p>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       {/* ── What is at risk ───────────────────────────────────────── */}
       <section className="mb-6 grid gap-3 sm:grid-cols-2">
@@ -620,17 +637,19 @@ export function Board({
         <p className="mb-2 text-[0.68rem] font-bold uppercase tracking-widest text-[#b8b1a8]">
           The rest of the picture
         </p>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+        <dl className={`grid grid-cols-2 gap-x-6 gap-y-2 ${books ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <Small
             label="Taken today"
             value={money(s.revenueToday.amount)}
             note={`${s.revenueToday.count} payment${s.revenueToday.count === 1 ? "" : "s"} in`}
           />
-          <Small
-            label="Taken this month"
-            value={money(s.revenueMonth.amount)}
-            note={`${s.revenueMonth.count} payments`}
-          />
+          {books && (
+            <Small
+              label="Taken this month"
+              value={money(s.revenueMonth.amount)}
+              note={`${s.revenueMonth.count} payments`}
+            />
+          )}
           <Small label="On the rack" value={String(s.onRack)} note={`${money(s.onRackValue)} · ${s.unpaidOnRack} unpaid`} />
           <Small
             label="Turnaround"
@@ -760,6 +779,9 @@ export function Board({
               </section>
             );
           }
+
+          // Money owed in total belongs to the books, not to the day.
+          if (slot === "debts" && !books) return null;
 
           // ── Washing gone, money not ───────────────────────────────
           if (slot === "debts") {

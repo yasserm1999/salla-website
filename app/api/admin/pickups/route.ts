@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   }
 
   if (what === "routine") {
-    if (staff.role !== "owner") {
+    if (staff.role !== "owner" && staff.role !== "manager") {
       return NextResponse.json({ error: "Only the shop sets up a repeat." }, { status: 403 });
     }
     const personId = text(body?.personId, 60);
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
   }
 
   if (what === "stopRoutine") {
-    if (staff.role !== "owner") {
+    if (staff.role !== "owner" && staff.role !== "manager") {
       return NextResponse.json({ error: "Only the shop stops a repeat." }, { status: 403 });
     }
     const id = text(body?.id, 60);

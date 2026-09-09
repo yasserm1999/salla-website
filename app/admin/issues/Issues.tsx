@@ -50,7 +50,7 @@ export function Issues({
   issues: Issue[];
   people: Person[];
   staff: string;
-  role: "owner" | "driver" | "washer";
+  role: "owner" | "manager" | "driver" | "washer";
   ready: boolean;
   problem: string | null;
 }) {
@@ -195,7 +195,7 @@ function IssueList({
   empty,
 }: {
   issues: Issue[];
-  role: "owner" | "driver" | "washer";
+  role: "owner" | "manager" | "driver" | "washer";
   staff: string;
   busy: string | null;
   send: Send;
@@ -225,7 +225,7 @@ function IssueCard({
   send,
 }: {
   issue: Issue;
-  role: "owner" | "driver" | "washer";
+  role: "owner" | "manager" | "driver" | "washer";
   staff: string;
   busy: string | null;
   send: Send;

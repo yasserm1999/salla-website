@@ -156,6 +156,7 @@ export default async function AdminPage() {
         debts={debts}
         summary={summary}
         admin={staff.name}
+        role={staff.role === "owner" ? "owner" : "manager"}
         delivery={delivery}
         today={today}
         unread={unread}

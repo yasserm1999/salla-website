@@ -12,6 +12,9 @@ export const metadata = { title: "Salla — pickups" };
  * Pickups only. Deliveries are orders in CleanCloud with promised windows
  * already on them, and they have a page of their own — showing them here as
  * well only invited the question of which screen was the real one.
+ *
+ * The manager arranges them alongside the owners: booking a standing
+ * collection is running the shop, not keeping its books.
  */
 export default async function PickupsPage({
   searchParams,
@@ -36,7 +39,7 @@ export default async function PickupsPage({
       people={board.data.people}
       routines={routines.data.filter((r) => r.kind === "pickup")}
       staff={staff.name}
-      role={staff.role === "owner" ? "owner" : "driver"}
+      role={staff.role === "owner" || staff.role === "manager" ? "owner" : "driver"}
       ready={board.ready}
       problem={board.ready ? null : board.reason}
     />
