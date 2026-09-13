@@ -153,7 +153,12 @@ export function Revenue({
             .slice()
             .reverse()
             .map((p) => (
-              <MonthCard key={p.key} period={p} best={Math.max(...periods.map((x) => x.net))} />
+              <MonthCard
+                key={p.key}
+                period={p}
+                best={Math.max(...periods.map((x) => x.net))}
+                isLastMonth={p.key === periods.filter((x) => !x.isCurrent).at(-1)?.key}
+              />
             ))}
         </div>
       </section>
@@ -578,7 +583,15 @@ function Race({
   );
 }
 
-function MonthCard({ period: p, best }: { period: Period; best: number }) {
+function MonthCard({
+  period: p,
+  best,
+  isLastMonth,
+}: {
+  period: Period;
+  best: number;
+  isLastMonth: boolean;
+}) {
   return (
     <article
       className={`rounded-2xl border p-4 ${
@@ -611,7 +624,73 @@ function MonthCard({ period: p, best }: { period: Period; best: number }) {
         <Cell label="Best day" value={p.best ? money(p.best.net) : "—"} note={p.best ? dayLabel(p.best.day) : undefined} />
         <Cell label="Traded" value={`${p.tradingDays}/${p.calendarDays}`} />
       </dl>
+
+      <ContractorBill period={p} isLastMonth={isLastMonth} />
     </article>
+  );
+}
+
+/** Three places, as the contractor writes it, so the figures can be ticked off line by line. */
+const rial = (n: number) =>
+  n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+
+/**
+ * What the carpet contractor is owed for the month, kind by kind.
+ *
+ * Kept apart from the month's figures above it because it is read for a
+ * different reason: to hold against the contractor's invoice. So it counts
+ * every carpet sent out, the owners' own included, and shows the rate beside
+ * each line — a disagreement is then either metres or rate, and plain which.
+ */
+function ContractorBill({ period: p, isLastMonth }: { period: Period; isLastMonth: boolean }) {
+  const bill = p.contractor;
+  return (
+    <div
+      className={`mt-3 rounded-xl border p-3 ${
+        isLastMonth ? "border-rose-300 bg-rose-50" : "border-[#ece7e1] bg-[#fbf8f4]"
+      }`}
+    >
+      <p className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[0.65rem] font-black uppercase tracking-widest text-rose-700">
+          Carpet contractor{p.isCurrent ? " · so far" : ""}
+        </span>
+        {isLastMonth && (
+          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-white">
+            Check their invoice
+          </span>
+        )}
+      </p>
+
+      <p className="mt-1 flex items-baseline justify-between gap-2">
+        <span className="text-2xl font-black tabular-nums text-rose-800">{rial(bill.cost)}</span>
+        <span className="text-xs font-bold tabular-nums text-[#8a9099]">
+          {bill.metres > 0 ? `${bill.metres.toFixed(2)} m²` : "no carpets"}
+        </span>
+      </p>
+
+      {bill.lines.length > 0 && (
+        <table className="mt-2 w-full text-xs tabular-nums">
+          <tbody>
+            {bill.lines.map((l) => (
+              <tr key={l.label} className="border-t border-rose-100">
+                <td className="py-1 font-semibold text-[#26364d]">{l.label}</td>
+                <td className="py-1 text-right text-[#8a9099]">
+                  {l.metres.toFixed(2)} m² × {rial(l.cost / l.metres)}
+                </td>
+                <td className="py-1 pl-2 text-right font-bold text-[#26364d]">{rial(l.cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {p.houseCarpetCost > 0.0005 && (
+        <p className="mt-1.5 text-[0.65rem] text-[#8a9099]">
+          Includes {rial(p.houseCarpetCost)} for the owners&rsquo; own rugs (c1, c6) — the contractor
+          bills these, but they are left out of net.
+        </p>
+      )}
+    </div>
   );
 }
 

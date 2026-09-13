@@ -1,4 +1,4 @@
-import type { Order } from "./cleancloud";
+import type { CarpetBill, Order } from "./cleancloud";
 import { buildCarpetBill, shopYmd } from "./cleancloud";
 
 /**
@@ -58,6 +58,14 @@ export type Period = {
   customerSales: number;
   carpetCost: number;
   carpetMetres: number;
+  /**
+   * The contractor's bill as they would write it: every carpet sent out in the
+   * month, the owners' own rugs included, kind by kind — the figure to hold
+   * against their invoice. Net still takes only the customer share above.
+   */
+  contractor: CarpetBill;
+  /** Of that bill, the owners' own rugs. */
+  houseCarpetCost: number;
   /** What the shop earned: customer sales less the contractor. */
   net: number;
 
@@ -138,6 +146,7 @@ export function buildPeriods(orders: Order[], now = new Date()): Period[] {
     // out from customer orders only — the owners' own rugs are not billed on.
     const bill = buildCarpetBill(theirs.map((r) => r.order));
     const net = customerSales - bill.cost;
+    const contractor = buildCarpetBill(mine.map((r) => r.order));
 
     const calendar = daysBetween(from, to);
     const byDay = new Map<string, { sales: number; orders: number; carpetCost: number }>();
@@ -186,6 +195,8 @@ export function buildPeriods(orders: Order[], now = new Date()): Period[] {
       customerSales,
       carpetCost: bill.cost,
       carpetMetres: bill.metres,
+      contractor,
+      houseCarpetCost: contractor.cost - bill.cost,
       net,
       orders: theirs.length,
       tradingDays,
