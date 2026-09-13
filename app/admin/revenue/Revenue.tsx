@@ -686,8 +686,7 @@ function ContractorBill({ period: p, isLastMonth }: { period: Period; isLastMont
 
       {p.houseCarpetCost > 0.0005 && (
         <p className="mt-1.5 text-[0.65rem] text-[#8a9099]">
-          Includes {rial(p.houseCarpetCost)} for the owners&rsquo; own rugs (c1, c6) — the contractor
-          bills these, but they are left out of net.
+          {`Includes ${rial(p.houseCarpetCost)} for the owners’ own rugs (c1, c6) — the contractor bills these, but they are left out of net.`}
         </p>
       )}
     </div>
