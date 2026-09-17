@@ -146,6 +146,42 @@ const toPerson = (r: PersonRow): Person => ({
  * fail quietly overnight.
  */
 export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people: Person[] }>> {
+  return loadSpan(day, day);
+}
+
+/** `days` before or after a date, as YYYY-MM-DD. */
+export function shiftDay(day: string, days: number): string {
+  return new Date(Date.parse(`${day}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+}
+
+/** Every day from one date to another, inclusive. */
+function eachDay(from: string, to: string): string[] {
+  const out: string[] = [];
+  const end = Date.parse(`${to}T12:00:00Z`);
+  for (let t = Date.parse(`${from}T12:00:00Z`); t <= end; t += DAY) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/**
+ * The same, over a stretch of days.
+ *
+ * The dashboard needs today and tomorrow, and the pickups page has to show
+ * what is booked further ahead: a collection arranged late at night for the
+ * morning was saved correctly but appeared on no screen at all, which reads
+ * exactly like the booking having failed.
+ *
+ * Standing arrangements are written out only as far as `fillUntil`, which
+ * defaults to the end of the span. Looking a fortnight ahead should not commit
+ * the shop to a fortnight of errands that stopping the repeat then cannot
+ * take back.
+ */
+export async function loadSpan(
+  from: string,
+  to: string,
+  fillUntil?: string
+): Promise<Store<{ jobs: Job[]; people: Person[] }>> {
   const empty = { jobs: [] as Job[], people: [] as Person[] };
   const db = client();
   if (!db) return { ready: false, reason: "Supabase is not configured.", data: empty };
@@ -163,7 +199,12 @@ export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people:
     };
   }
 
-  const due = (routines ?? []).filter((r) => fallsOn(r.starts_on, r.every_days, day));
+  const fillTo = fillUntil && fillUntil < to ? fillUntil : to;
+  const due = eachDay(from, fillTo).flatMap((day) =>
+    (routines ?? [])
+      .filter((r) => fallsOn(r.starts_on, r.every_days, day))
+      .map((r) => ({ routine: r, day }))
+  );
   if (due.length > 0) {
     /*
       Ask what is already there, then insert only what is not.
@@ -181,22 +222,25 @@ export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people:
     */
     const { data: already } = await db
       .from("salla_jobs")
-      .select("routine_id")
-      .eq("on_date", day)
+      .select("routine_id, on_date")
+      .gte("on_date", from)
+      .lte("on_date", fillTo)
       .not("routine_id", "is", null);
 
-    const have = new Set((already ?? []).map((r) => String(r.routine_id)));
-    const wanted = due.filter((r) => !have.has(String(r.id)));
+    const have = new Set(
+      (already ?? []).map((r) => `${String(r.routine_id)}|${String(r.on_date)}`)
+    );
+    const wanted = due.filter((d) => !have.has(`${String(d.routine.id)}|${d.day}`));
 
     if (wanted.length > 0) {
       await db.from("salla_jobs").insert(
-        wanted.map((r) => ({
-          person_id: r.person_id,
-          routine_id: r.id,
-          kind: r.kind,
-          on_date: day,
-          at_time: r.at_time,
-          note: r.note,
+        wanted.map((d) => ({
+          person_id: d.routine.person_id,
+          routine_id: d.routine.id,
+          kind: d.routine.kind,
+          on_date: d.day,
+          at_time: d.routine.at_time,
+          note: d.routine.note,
         }))
       );
     }
@@ -208,7 +252,8 @@ export async function loadDay(day: string): Promise<Store<{ jobs: Job[]; people:
       .select(
         "id, kind, status, at_time, on_date, note, reason, out_at, done_at, by_staff, routine_id, salla_people (id, name, phone, address, note, cleancloud_id)"
       )
-      .eq("on_date", day),
+      .gte("on_date", from)
+      .lte("on_date", to),
     db.from("salla_people").select("id, name, phone, address, note, cleancloud_id").order("name"),
   ]);
 
@@ -295,6 +340,13 @@ export async function loadRoutines(today: string): Promise<Store<Routine[]>> {
   return { ready: true, data: rows };
 }
 
+/** "Fri 18 Sept" — so a confirmation says which day, not just "added". */
+export function dayLabel(day: string): string {
+  const t = Date.parse(`${day}T12:00:00Z`);
+  if (Number.isNaN(t)) return day;
+  return new Date(t).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
 // ── Writing ────────────────────────────────────────────────────────────
 
 export type Wrote = { ok: true; message: string } | { ok: false; error: string };
@@ -337,6 +389,32 @@ export async function addJob(input: {
   const db = client();
   if (!db) return { ok: false, error: "Supabase is not configured." };
 
+  /*
+    The same person, the same day, twice.
+
+    Somebody who cannot see the pickup they just booked presses the button
+    again, and the shop ends up driving to one house three times. The first
+    booking stands and is named back, so it is plain the round already has it.
+  */
+  const { data: already } = await db
+    .from("salla_jobs")
+    .select("at_time, salla_people (name)")
+    .eq("person_id", input.personId)
+    .eq("on_date", input.onDate)
+    .in("status", ["waiting", "out"])
+    .limit(1);
+
+  const clash = (already ?? [])[0];
+  if (clash) {
+    const who = (clash.salla_people as unknown as { name?: string } | null)?.name ?? "That customer";
+    return {
+      ok: false,
+      error: `${who} is already booked in for ${dayLabel(input.onDate)}${
+        clash.at_time ? ` at ${clash.at_time}` : ""
+      }. It is on the round already.`,
+    };
+  }
+
   const { error } = await db.from("salla_jobs").insert({
     person_id: input.personId,
     kind: input.kind,
@@ -346,7 +424,10 @@ export async function addJob(input: {
   });
 
   if (error) return fail(error);
-  return { ok: true, message: "Added to the round." };
+  return {
+    ok: true,
+    message: `Booked for ${dayLabel(input.onDate)}${input.atTime ? ` at ${input.atTime}` : ""}.`,
+  };
 }
 
 export async function addRoutine(input: {
@@ -395,7 +476,27 @@ export async function stopRoutine(id: string, reason: string, by: string): Promi
     .eq("id", id);
 
   if (error) return fail(error);
-  return { ok: true, message: "Stopped. Days already on the board are untouched." };
+
+  /*
+    Occurrences already written for days still to come go with it. They were
+    only ever this arrangement repeating itself, and leaving them behind sends
+    the van out next week to a collection the shop has just called off.
+    Anything already collected, or on for today while the driver may be out,
+    stays exactly as it is.
+  */
+  const { count } = await db
+    .from("salla_jobs")
+    .delete({ count: "exact" })
+    .eq("routine_id", id)
+    .eq("status", "waiting")
+    .gt("on_date", shopToday());
+
+  return {
+    ok: true,
+    message: count
+      ? `Stopped, and ${count} day${count === 1 ? "" : "s"} still to come taken off the round.`
+      : "Stopped. Nothing already collected is touched.",
+  };
 }
 
 export async function setJobStatus(input: {

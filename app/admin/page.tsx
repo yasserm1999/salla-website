@@ -19,7 +19,7 @@ import {
   deliveryConcerns,
   type StopState,
 } from "@/lib/delivery";
-import { loadDay } from "@/lib/pickups";
+import { loadSpan, shiftDay } from "@/lib/pickups";
 import { loadSeen } from "@/lib/reviews";
 import { knownNames } from "@/lib/pickups";
 import { Board } from "./Board";
@@ -59,7 +59,7 @@ export default async function AdminPage() {
       const states: Record<string, StopState> = {};
       for (const [id, p] of progress) states[id] = p.state;
 
-      const forDriver = await loadDay(today);
+      const forDriver = await loadSpan(today, shiftDay(today, 1));
 
       return (
         <Driver
@@ -75,6 +75,7 @@ export default async function AdminPage() {
               phone: j.person.phone,
               address: j.person.address,
               atTime: j.atTime,
+              onDate: j.onDate,
               status: j.status,
               note: j.note,
             }))}
@@ -104,7 +105,7 @@ export default async function AdminPage() {
       The van goes out once. A schedule showing only half of what it has to
       do is a schedule somebody has to hold the other half of in their head.
     */
-    const pickupBoard = await loadDay(today);
+    const pickupBoard = await loadSpan(today, shiftDay(today, 1));
 
     /*
       Orders nobody has read yet. Only the last few days count as news — an
@@ -170,6 +171,7 @@ export default async function AdminPage() {
             phone: j.person.phone,
             address: j.person.address,
             atTime: j.atTime,
+            onDate: j.onDate,
             status: j.status,
             everyDays: j.everyDays,
             note: j.note,

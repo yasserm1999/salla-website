@@ -70,6 +70,7 @@ export function Pickups({
   day,
   today,
   jobs,
+  ahead,
   people,
   routines,
   staff,
@@ -80,6 +81,8 @@ export function Pickups({
   day: string;
   today: string;
   jobs: Job[];
+  /** Booked for later days — so a booking made tonight can be seen tonight. */
+  ahead: Job[];
   people: Person[];
   routines: Routine[];
   staff: string;
@@ -212,7 +215,7 @@ export function Pickups({
             ["add", "Schedule a pickup"],
             ["repeat", "Set up a repeat"],
             ["repeats", `Repeating pickups (${live.length})`],
-            ["booked", `Booked in (${open.length})`],
+            ["booked", `Booked in (${open.length}${ahead.length ? ` + ${ahead.length} ahead` : ""})`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -241,7 +244,21 @@ export function Pickups({
       </div>
 
       {panel === "add" && (
-        <AddPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("booked")} />
+        <AddPanel
+          people={people}
+          day={day}
+          busy={busy}
+          send={send}
+          /*
+            Straight to the day it was booked for, not to the day that happened
+            to be on screen: landing on an empty "today" after booking tomorrow
+            is what made a saved pickup look lost.
+          */
+          onDone={(booked) => {
+            setPanel("booked");
+            if (booked !== day) router.push(`/admin/pickups?day=${booked}`);
+          }}
+        />
       )}
       {panel === "repeat" && (
         <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("booked")} />
@@ -293,6 +310,63 @@ export function Pickups({
               </div>
             )}
           </section>
+
+          {/*
+            What is booked for the days after this one.
+
+            Not a repeat of the day above: these are the errands already
+            promised further out, which the shop otherwise has no way of seeing
+            until the morning they fall due.
+          */}
+          {ahead.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
+                Booked ahead — {ahead.length}
+              </h2>
+              <div className="overflow-hidden rounded-xl border border-[#ece7e1] bg-white">
+                {Object.entries(
+                  ahead.reduce<Record<string, Job[]>>((by, j) => {
+                    (by[j.onDate] ??= []).push(j);
+                    return by;
+                  }, {})
+                ).map(([on, list]) => (
+                  <div key={on} className="border-b border-[#f0e9df] last:border-b-0">
+                    <Link
+                      href={`/admin/pickups?day=${on}`}
+                      className="flex items-baseline justify-between gap-2 bg-[#faf7f2] px-4 py-2 hover:bg-[#f4ece1]"
+                    >
+                      <span className="text-sm font-black uppercase tracking-wide text-[#26364d]">
+                        {on === shift(today, 1) ? "Tomorrow" : dayName(on)}
+                      </span>
+                      <span className="text-xs font-semibold text-[#8a9099]">
+                        {list.length} pickup{list.length === 1 ? "" : "s"} →
+                      </span>
+                    </Link>
+                    <ul className="divide-y divide-[#f0e9df]">
+                      {list.map((j) => (
+                        <li key={j.id} className="flex items-baseline gap-2 px-4 py-2 text-sm">
+                          <span className="w-14 shrink-0 font-black tabular-nums text-[#26364d]">
+                            {j.atTime ?? "—"}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-semibold text-[#26364d]">
+                            {j.person.name}
+                            {j.person.cleanCloudId ? (
+                              <span className="ml-1.5 text-xs font-medium text-[#b8b1a8]">
+                                c{j.person.cleanCloudId}
+                              </span>
+                            ) : null}
+                          </span>
+                          {j.everyDays ? (
+                            <span className="shrink-0 text-xs font-semibold text-[#b9925d]">repeat</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {settled.length > 0 && (
             <section className="mb-5">
@@ -570,7 +644,7 @@ function AddPanel({
   day: string;
   busy: string | null;
   send: Send;
-  onDone: () => void;
+  onDone: (booked: string) => void;
 }) {
   const [personId, setPersonId] = useState("");
   const [onDate, setOnDate] = useState(day);
@@ -627,7 +701,7 @@ function AddPanel({
 
         <button
           onClick={async () => {
-            if (await send({ what: "job", personId, onDate, atTime, note }, "job")) onDone();
+            if (await send({ what: "job", personId, onDate, atTime, note }, "job")) onDone(onDate);
           }}
           disabled={!!busy || !personId}
           className="w-full rounded-lg bg-[#26364d] py-2.5 text-sm font-bold text-white disabled:opacity-50"

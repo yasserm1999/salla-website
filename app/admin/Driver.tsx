@@ -77,6 +77,8 @@ export type PickupRow = {
   phone: string | null;
   address: string | null;
   atTime: string | null;
+  /** The day it is booked for — the van is told about tomorrow as well. */
+  onDate: string;
   status: string;
   note: string | null;
 };
@@ -100,6 +102,9 @@ export function Driver({
   storeProblem: string | null;
 }) {
   const router = useRouter();
+  // Today's collections can be marked; later ones are only announced.
+  const onToday = pickups.filter((p) => p.onDate <= todayYmd);
+  const onLater = pickups.filter((p) => p.onDate > todayYmd);
   const [people, setPeople] = useState<Record<string, Person>>({});
   const [looking, setLooking] = useState(false);
 
@@ -290,7 +295,7 @@ export function Driver({
         </p>
       )}
 
-      {pickups.length > 0 && (
+      {onToday.length > 0 && (
         <section className="mb-6">
           {/*
             Collections lead the page. Nothing can be washed that has not been
@@ -300,14 +305,54 @@ export function Driver({
           <h2 className="mb-2.5 flex flex-wrap items-baseline gap-x-3 rounded-lg bg-sky-600 px-4 py-2.5 text-white">
             <span className="text-xl font-black uppercase tracking-wide">To collect</span>
             <span className="ml-auto text-sm font-bold">
-              {pickups.filter((p) => p.status === "waiting" || p.status === "out").length} left
+              {onToday.filter((p) => p.status === "waiting" || p.status === "out").length} left
             </span>
           </h2>
           <div className="space-y-2.5">
-            {pickups.map((p) => (
+            {onToday.map((p) => (
               <PickupCard key={p.id} pickup={p} onMark={markPickup} busy={pickupBusy} />
             ))}
           </div>
+        </section>
+      )}
+
+      {/*
+        Tomorrow's collections, named but not markable.
+
+        Worth knowing about tonight — one of them may be on the way home from
+        the last delivery — but they cannot be started yet, so they get no
+        buttons. A row that can be tapped a day early is a row that gets tapped
+        by mistake.
+      */}
+      {onLater.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-2.5 flex flex-wrap items-baseline gap-x-3 rounded-lg bg-[#e6dccf] px-4 py-2.5 text-[#26364d]">
+            <span className="text-lg font-black uppercase tracking-wide">To collect tomorrow</span>
+            <span className="ml-auto text-sm font-bold">{onLater.length} booked</span>
+          </h2>
+          <ul className="divide-y divide-[#f0e9df] overflow-hidden rounded-xl border border-[#ece7e1] bg-white">
+            {onLater.map((p) => (
+              <li key={p.id} className="flex items-baseline gap-2.5 px-4 py-2.5">
+                <span className="w-16 shrink-0 text-base font-black tabular-nums text-[#26364d]">
+                  {p.atTime ?? "—"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-[#26364d]">{p.name}</span>
+                  {p.address && (
+                    <span className="block text-xs text-[#8a9099]">{p.address}</span>
+                  )}
+                </span>
+                {p.phone && (
+                  <a
+                    href={`tel:${p.phone.replace(/[^\d+]/g, "")}`}
+                    className="shrink-0 rounded border border-[#d8cbbd] px-2 py-1 text-xs font-bold text-[#546d83]"
+                  >
+                    Call
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

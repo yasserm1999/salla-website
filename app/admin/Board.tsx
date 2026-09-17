@@ -23,6 +23,8 @@ export type PickupRow = {
   phone: string | null;
   address: string | null;
   atTime: string | null;
+  /** The day it is booked for. Collections are not all for today. */
+  onDate: string;
   status: string;
   everyDays: number | null;
   note: string | null;
@@ -114,6 +116,16 @@ const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** "2026-08-27" as a person says it: "Thu 27 Aug". */
+/** "Today" or "Tomorrow", for a day the delivery runs never named. */
+function dayHeading(day: string, today: string): string {
+  const gap = Math.round(
+    (Date.parse(`${day}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000
+  );
+  if (gap === 0) return "Today";
+  if (gap === 1) return "Tomorrow";
+  return gap < 0 ? "Earlier" : "Later";
+}
+
 function runDay(day: string): string {
   const parsed = Date.parse(`${day}T12:00:00Z`);
   if (Number.isNaN(parsed)) return "";
@@ -663,7 +675,31 @@ export function Board({
         {ORDER.map((slot) => {
           // ── Who is driving where ──────────────────────────────────
           if (slot === "deliveries") {
-            if (runs.length === 0) return null;
+            /*
+              The days to plan, which are not only the days with deliveries.
+
+              A day can have a collection booked and nothing to deliver, and
+              such a day used to vanish from this list altogether: it was built
+              from the delivery runs, and pickups were only ever attached to
+              today. A pickup arranged for tomorrow appeared on no screen at
+              all, which read exactly like the booking having failed.
+            */
+            const plans: { day: string; run: Run | null; onDay: PickupRow[] }[] = [
+              ...runs.map((run) => ({
+                day: run.day,
+                run,
+                onDay: pickups.filter((p) => p.onDate === run.day),
+              })),
+              ...[...new Set(pickups.map((p) => p.onDate))]
+                .filter((d) => !runs.some((r) => r.day === d))
+                .map((day) => ({
+                  day,
+                  run: null,
+                  onDay: pickups.filter((p) => p.onDate === day),
+                })),
+            ].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+
+            if (plans.length === 0) return null;
             return (
               <section
                 key={slot}
@@ -680,26 +716,34 @@ export function Board({
                 />
                 {open[slot] && (
                   <div className="space-y-px bg-violet-200">
-                    {runs.map((run) => (
-                      <div key={run.day} className="bg-white px-4 py-3">
+                    {plans.map(({ day: planDay, run, onDay }) => (
+                      <div key={planDay} className="bg-white px-4 py-3">
                         <p
                           className={`mb-2 flex flex-wrap items-baseline gap-x-3 rounded-lg px-3 py-2 ${
-                            run.label.startsWith("Missed")
+                            run?.label.startsWith("Missed")
                               ? "bg-red-600 text-white"
-                              : run.label === "Today"
+                              : planDay === today
                                 ? "bg-[#26364d] text-white"
                                 : "bg-[#e6dccf] text-[#26364d]"
                           }`}
                         >
                           <span className="text-lg font-black uppercase tracking-wide">
-                            {run.label}
+                            {run?.label ?? dayHeading(planDay, today)}
                           </span>
-                          <span className="text-xs font-semibold opacity-80">{runDay(run.day)}</span>
+                          <span className="text-xs font-semibold opacity-80">{runDay(planDay)}</span>
                           <span className="text-sm font-semibold opacity-90">
-                            {run.stops.length} stop{run.stops.length === 1 ? "" : "s"} ·{" "}
-                            {money(run.value)}
+                            {[
+                              run
+                                ? `${run.stops.length} stop${run.stops.length === 1 ? "" : "s"} · ${money(run.value)}`
+                                : null,
+                              onDay.length
+                                ? `${onDay.length} pickup${onDay.length === 1 ? "" : "s"}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </span>
-                          {run.notReady > 0 && (
+                          {run && run.notReady > 0 && (
                             <span className="rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-bold text-red-700 sm:ml-auto">
                               {run.notReady} not washed yet
                             </span>
@@ -722,10 +766,7 @@ export function Board({
                             order with the deliveries rather than in a list of
                             their own — the van does them on the same trip.
                           */}
-                          {drivingOrder(
-                            run.stops,
-                            run.day === today ? pickups : []
-                          ).map((item, i) =>
+                          {drivingOrder(run?.stops ?? [], onDay).map((item, i) =>
                             item.kind === "pickup" ? (
                               <PickupLine key={item.pickup.id} pickup={item.pickup} at={i + 1} />
                             ) : (
