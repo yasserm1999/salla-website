@@ -64,6 +64,7 @@ export type Ring = {
 type Row = Record<string, unknown>;
 
 const toRing = (r: Row): Ring => ({
+  orders: Array.isArray(r.orders) ? (r.orders as BellOrder[]) : [],
   id: String(r.id),
   at: String(r.created_at),
   asked: (r.asked as string) ?? null,
@@ -112,6 +113,12 @@ export async function lookup(asked: string): Promise<Found> {
   const phone = tidyPhone(text);
   const digits = text.replace(/\D/g, "");
   let customerId: string | null = null;
+  /*
+    A name we already hold. CleanCloud rate-limits customer lookups hard, and
+    a refusal in that moment must not turn a known customer into an unknown
+    one on the screen inside.
+  */
+  let known: string | null = null;
 
   // A bare short number is a customer number: c216, 216, #216.
   if (!phone && /^\d{1,6}$/.test(digits)) customerId = digits;
@@ -132,11 +139,26 @@ export async function lookup(asked: string): Promise<Found> {
         const theirs = tidyPhone(String((p as Row).phone ?? ""));
         return theirs && theirs === phone;
       });
-      if (hit) customerId = String((hit as Row).cleancloud_id);
+      if (hit) {
+        customerId = String((hit as Row).cleancloud_id);
+        known = (hit as Row).name ? String((hit as Row).name) : null;
+      }
     }
   }
 
   if (!customerId) return empty;
+
+  if (!known) {
+    const store = db();
+    if (store) {
+      const { data } = await store
+        .from("salla_people")
+        .select("name")
+        .eq("cleancloud_id", customerId)
+        .maybeSingle();
+      if (data) known = String((data as Row).name);
+    }
+  }
 
   // What they are here for. Their own orders only, and only the open ones.
   const { from, to } = defaultWindow();
@@ -152,7 +174,7 @@ export async function lookup(asked: string): Promise<Found> {
     name = who.get(customerId)?.name ?? null;
   } catch {
     // CleanCloud being slow or cross must not stop the bell ringing.
-    return { customerId, name: null, orders: [] };
+    return { customerId, name: known, orders: [] };
   }
 
   const orders: BellOrder[] = mine
@@ -166,7 +188,7 @@ export async function lookup(asked: string): Promise<Found> {
     }))
     .sort((x, y) => Number(y.ready) - Number(x.ready));
 
-  return { customerId, name, orders };
+  return { customerId, name: name ?? known, orders };
 }
 
 const MINUTE = 60_000;
@@ -229,6 +251,7 @@ export async function ring(input: {
       asked: input.asked,
       customer_id: found.customerId,
       customer_name: found.name,
+      orders: found.orders,
       lang: input.lang,
     })
     .select("id")
@@ -270,22 +293,17 @@ export async function recentRings(): Promise<Ring[]> {
   return (data ?? []).map((r) => toRing(r as Row));
 }
 
-/** The ones still waiting, with what each customer is here to collect. */
+/**
+ * The bell's last hour, for the screen inside.
+ *
+ * What each customer was collecting was worked out once, when they pressed
+ * the button, and written down with the ring. The screen indoors asks for
+ * this list every three seconds, and looking the customer up again each time
+ * would mean asking CleanCloud twenty times a minute for an answer that
+ * cannot have changed while somebody stands in the car park.
+ */
 export async function waitingRings(): Promise<Ring[]> {
-  const rings = await recentRings();
-  const waiting = rings.filter((r) => !r.ackAt);
-
-  const withOrders = await Promise.all(
-    waiting.map(async (r) => {
-      if (!r.asked) return r;
-      const found = await lookup(r.asked);
-      return { ...r, orders: found.orders, customerName: r.customerName ?? found.name };
-    })
-  );
-
-  // The answered ones keep their place on the list, without a second lookup.
-  const byId = new Map(withOrders.map((r) => [r.id, r]));
-  return rings.map((r) => byId.get(r.id) ?? r);
+  return recentRings();
 }
 
 export async function acknowledge(id: string, by: string): Promise<boolean> {

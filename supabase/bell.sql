@@ -18,6 +18,8 @@ create table if not exists salla_bell_rings (
   customer_name  text,
   /* en | ar — which language the car park was reading. */
   lang           text not null default 'en',
+  /* What they were collecting when they rang, as it stood at that moment. */
+  orders         jsonb not null default '[]'::jsonb,
   /* When somebody inside said they were coming, and who. */
   ack_at         timestamptz,
   ack_by         text
