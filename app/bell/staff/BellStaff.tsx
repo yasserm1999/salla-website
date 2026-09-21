@@ -359,7 +359,7 @@ function Waiting({ ring: r, busy, onComing }: { ring: Ring; busy: boolean; onCom
                   <Package className="h-4 w-4 text-[#b9925d]" aria-hidden />
                   <span className="text-sm font-semibold text-[#26364d]">#{o.id}</span>
                   <span className="text-xs text-[#5b6675]">
-                    {o.pieces} pc{o.pieces === 1 ? "" : "s"} · due {o.when}
+                    {o.pieces} pc{o.pieces === 1 ? "" : "s"} · {dueWord(o.when)}
                   </span>
                 </li>
               ))}
@@ -388,6 +388,22 @@ const hhmm = new Intl.DateTimeFormat("en-GB", {
 });
 
 const clock = (iso: string) => hhmm.format(new Date(iso));
+
+/** The wash queues name their bands in code; a person reads them in English. */
+function dueWord(when: string | null): string {
+  switch (when) {
+    case "late":
+      return "overdue";
+    case "today":
+      return "due today";
+    case "tomorrow":
+      return "due tomorrow";
+    case "inTwo":
+      return "due in 2 days";
+    default:
+      return "due later";
+  }
+}
 
 function ago(iso: string): string {
   const seconds = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));

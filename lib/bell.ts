@@ -170,11 +170,21 @@ export async function lookup(asked: string): Promise<Found> {
       .filter((o) => o.customerID === customerId)
       .map((o) => assess(o))
       .filter((a) => a.urgency !== "collected");
-    const who = await fetchCustomers([customerId]);
-    name = who.get(customerId)?.name ?? null;
   } catch {
     // CleanCloud being slow or cross must not stop the bell ringing.
     return { customerId, name: known, orders: [] };
+  }
+
+  /*
+    The name is asked for separately, and is allowed to fail on its own.
+    CleanCloud rate-limits customer lookups far harder than orders, and losing
+    the rack numbers because a name was refused is the wrong trade: the person
+    is standing outside either way, and the shop already knows most names.
+  */
+  try {
+    name = (await fetchCustomers([customerId])).get(customerId)?.name ?? null;
+  } catch {
+    name = null;
   }
 
   const orders: BellOrder[] = mine
@@ -192,6 +202,15 @@ export async function lookup(asked: string): Promise<Found> {
 }
 
 const MINUTE = 60_000;
+
+/**
+ * How many rings one address may make in ten minutes.
+ *
+ * Several customers can share one address — a family, or a phone shared
+ * between cars — so this is deliberately looser than the two-minute rule per
+ * device, and can be raised for the shop without a deploy.
+ */
+const ipCap = () => Number(process.env.BELL_IP_LIMIT ?? 5) || 5;
 
 export type RingResult =
   | { ok: true; id: string }
@@ -236,7 +255,7 @@ export async function ring(input: {
       .select("id", { count: "exact", head: true })
       .eq("ip_hash", ipHash)
       .gte("created_at", new Date(Date.now() - 10 * MINUTE).toISOString());
-    if ((count ?? 0) >= 5) {
+    if ((count ?? 0) >= ipCap()) {
       return { ok: false, tooSoon: true, ringId: null };
     }
   }
