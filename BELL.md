@@ -18,7 +18,22 @@ The bell link sits in the site navigation (desktop and mobile), in both language
 Owners can always open the staff page as well, so a ring is never left unwatched.
 Nothing else changes: the bell uses the existing admin login.
 
-## Setting up Sonu's tablet
+## Setting up an iPad (Safari)
+
+Apple allows alerts only from a Home Screen app, never from a Safari tab, so the order
+matters:
+
+1. Open **sallalaundry.com/bell/staff** in Safari and sign in as `sonu`.
+2. Tap the **Share** button (the square with an arrow) → **Add to Home Screen** → **Add**.
+3. Close Safari. Open **Salla bell** from the Home Screen.
+4. Tap **Turn on alerts** and allow notifications.
+5. Tap **Enable sound** once, and turn the iPad's ringer and media volume up.
+
+Needs iPadOS 16.4 or newer. In a Safari tab the alerts button reads "Add to Home Screen
+first" and the page shows these steps; the page still rings on its own while it is open
+with sound enabled.
+
+## Setting up an Android tablet
 
 1. Open **sallalaundry.com/bell/staff** in Chrome and sign in as `sonu`.
 2. Tap **Enable sound** once. Browsers refuse to make noise until the page has been

@@ -29,7 +29,7 @@ export default function BellStaff({
 }) {
   const [rings, setRings] = useState<Ring[]>(first);
   const [sound, setSound] = useState(false);
-  const [push, setPush] = useState<"off" | "on" | "blocked" | "unsupported">("off");
+  const [push, setPush] = useState<"off" | "on" | "blocked" | "unsupported" | "install">("off");
   const [offline, setOffline] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -138,7 +138,15 @@ export default function BellStaff({
 
   const subscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !pushKey) {
-      setPush("unsupported");
+      /*
+        An iPad in a Safari tab, almost always.
+
+        Apple allows alerts only once the page has been added to the Home
+        Screen and opened from there — in a tab there is no PushManager at
+        all. That is a different problem from a browser too old to do any of
+        this, and it has a remedy the person can follow.
+      */
+      setPush(onApple() && !installed() ? "install" : "unsupported");
       return;
     }
     try {
@@ -227,16 +235,20 @@ export default function BellStaff({
                   ? "bg-emerald-600 text-white"
                   : push === "blocked"
                     ? "bg-red-600 text-white"
-                    : "border border-[#d8cbbd] bg-white text-[#546d83]"
+                    : push === "install"
+                      ? "bg-[#26364d] text-white"
+                      : "border border-[#d8cbbd] bg-white text-[#546d83]"
               }`}
             >
               {push === "on"
                 ? "Alerts on"
                 : push === "blocked"
                   ? "Alerts blocked"
-                  : push === "unsupported"
-                    ? "Alerts unavailable"
-                    : "Turn on alerts"}
+                  : push === "install"
+                    ? "Add to Home Screen first"
+                    : push === "unsupported"
+                      ? "Alerts unavailable"
+                      : "Turn on alerts"}
             </button>
           </div>
         </header>
@@ -244,6 +256,35 @@ export default function BellStaff({
         {!sound && (
           <p className="mb-4 rounded-2xl bg-[#d8b98a] px-4 py-3 text-sm font-bold text-[#26364d]">
             Tap “Enable sound” once so the bell can ring out loud on this device.
+          </p>
+        )}
+
+        {push === "install" && (
+          <div className="mb-4 rounded-2xl border-2 border-[#26364d] bg-white px-4 py-3 text-sm text-[#26364d]">
+            <p className="font-bold">To get alerts on this iPad</p>
+            <ol className="mt-1.5 list-decimal space-y-1 ps-5 leading-6">
+              <li>
+                Tap the <strong>Share</strong> button in Safari (the square with an arrow).
+              </li>
+              <li>
+                Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.
+              </li>
+              <li>Close Safari and open <strong>Salla bell</strong> from the Home Screen.</li>
+              <li>
+                Tap <strong>Turn on alerts</strong> there, and allow notifications.
+              </li>
+            </ol>
+            <p className="mt-2 text-xs text-[#5b6675]">
+              Apple only allows alerts from a Home Screen app, never from a Safari tab. Until
+              then this page still rings on its own as long as it is open and sound is enabled.
+            </p>
+          </div>
+        )}
+
+        {push === "blocked" && (
+          <p className="mb-4 rounded-2xl border-2 border-red-500 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+            Notifications are switched off for this app. Turn them back on in Settings →
+            Notifications → Salla bell, then tap “Turn on alerts” again.
           </p>
         )}
 
@@ -414,6 +455,26 @@ function ago(iso: string): string {
 function waitLabel(from: string, to: string): string {
   const seconds = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 1000));
   return seconds < 60 ? `${seconds}s wait` : `${Math.round(seconds / 60)} min wait`;
+}
+
+/**
+ * An Apple device, including the iPads that claim to be Macs.
+ *
+ * iPadOS reports itself as "Macintosh" in desktop mode, so the user agent
+ * alone is not enough; a Mac with a touch screen is the thing that does not
+ * exist.
+ */
+function onApple(): boolean {
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/** Opened from the Home Screen rather than in a browser tab. */
+function installed(): boolean {
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
 }
 
 /** The VAPID key travels as base64url and the browser wants bytes. */

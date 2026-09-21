@@ -10,6 +10,13 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Salla — the bell",
   manifest: "/bell.webmanifest",
+  /*
+    Safari ignores the manifest for this and reads its own meta tags. Without
+    them an iPad opens the home-screen copy in a plain browser tab, and a tab
+    is never allowed to raise an alert.
+  */
+  appleWebApp: { capable: true, title: "Salla bell", statusBarStyle: "black-translucent" },
+  icons: { apple: "/logo.png" },
 };
 
 /**
