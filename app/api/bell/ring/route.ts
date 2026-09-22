@@ -34,12 +34,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  // The buzz is a courtesy on top of the screen, so a failure here is not the
-  // customer's problem: the ring is already recorded and the tablet will show
-  // it within seconds either way.
+  /*
+    The notification says where to walk, not merely that somebody is there —
+    a rack number read off a locked phone can save the walk back. It reuses
+    what the ring already worked out, so it costs no second lookup and cannot
+    disagree with the screen indoors.
+
+    Buzzing is a courtesy on top of that screen, so a failure here is not the
+    customer's problem: the ring is recorded either way.
+  */
+  const { found } = result;
+  let line = "Someone is waiting outside.";
+  if (asked) {
+    const racks = [...new Set(found.orders.filter((o) => o.ready).map((o) => o.rack ?? "?"))];
+    line = found.name ?? `"${asked}"`;
+    line += racks.length
+      ? ` — ready on rack ${racks.join(", ")}`
+      : found.customerId
+        ? " — nothing ready"
+        : " — not recognised";
+  }
+
   await buzz(bellStaff(), {
     title: "🔔 Customer at the door",
-    body: asked ? `Someone is waiting outside — ${asked}` : "Someone is waiting outside.",
+    body: line,
     ringId: result.id,
   });
 

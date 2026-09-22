@@ -32,9 +32,9 @@ const WORDS = {
     cancel: "Cancel",
     ringing: "Ringing… we're on our way!",
     ringingBlurb: "Please stay where you are. This screen will change when someone is coming out.",
-    coming: "Sonu is coming out",
-    comingBlurb: "Someone has answered the bell and is on the way to your car.",
-    again: "Ring again",
+    coming: "Someone is coming out to you",
+    comingBlurb: "The bell has been answered and a member of staff is on the way to your car.",
+    again: "Nobody came? Ring again",
     already: "Bell already rung — we're coming.",
     failed: "That did not go through. Check your connection and try again.",
     waiting: "Waiting for an answer…",
@@ -52,9 +52,9 @@ const WORDS = {
     cancel: "إلغاء",
     ringing: "جارٍ التنبيه… نحن في الطريق إليك!",
     ringingBlurb: "يرجى البقاء مكانك. ستتغير هذه الشاشة عند خروج أحد الموظفين.",
-    coming: "سونو في طريقه إليك",
-    comingBlurb: "تم استلام التنبيه، والموظف في طريقه إلى سيارتك.",
-    again: "اقرع الجرس مرة أخرى",
+    coming: "أحد موظفينا في طريقه إليك",
+    comingBlurb: "تم استلام التنبيه، وأحد الموظفين في طريقه إلى سيارتك.",
+    again: "لم يأتِ أحد؟ اقرع الجرس مرة أخرى",
     already: "تم قرع الجرس — نحن قادمون.",
     failed: "لم يتم الإرسال. تحقق من الاتصال وحاول مرة أخرى.",
     waiting: "بانتظار الرد…",
@@ -251,9 +251,14 @@ function Answered({ t, onAgain }: { t: Words; onAgain: () => void }) {
       </div>
       <p className="mt-8 text-2xl font-black text-emerald-700">{t.coming}</p>
       <p className="mt-2 text-sm leading-7 text-[#5b6675]">{t.comingBlurb}</p>
+      {/*
+        Ringing a second time is allowed the moment the first one is answered:
+        being told somebody is coming, and then standing there, is exactly when
+        a person needs the bell again.
+      */}
       <button
         onClick={onAgain}
-        className="mt-8 rounded-2xl border border-[#d8cbbd] px-5 py-3 text-sm font-bold text-[#546d83]"
+        className="mt-8 w-full rounded-2xl bg-[#26364d] px-5 py-4 text-base font-black text-white active:scale-[0.99]"
       >
         {t.again}
       </button>

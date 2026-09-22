@@ -213,17 +213,21 @@ const MINUTE = 60_000;
 const ipCap = () => Number(process.env.BELL_IP_LIMIT ?? 5) || 5;
 
 export type RingResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; found: Found }
   | { ok: false; tooSoon: true; ringId: string | null }
   | { ok: false; tooSoon: false; error: string };
 
 /**
  * Ring it.
  *
- * One press per device every two minutes: pressing again because nobody has
- * come yet is exactly what a person does, and it must not turn into five
- * alerts on the tablet. The earlier ring is handed back instead, so the car
- * park keeps watching the same one.
+ * The rule holds only while a ring is still unanswered: pressing again
+ * because nobody has come yet is exactly what a person does, and it must not
+ * turn into five alerts on the tablet — the earlier ring is handed back
+ * instead, so the car park keeps watching the same one.
+ *
+ * Once somebody has said they are coming, that ring is finished business. A
+ * customer who was told help was on its way, and then waited, may ring again
+ * straight away: they are usually right that they have been forgotten.
  */
 export async function ring(input: {
   deviceId: string;
@@ -237,9 +241,10 @@ export async function ring(input: {
   const since = new Date(Date.now() - 2 * MINUTE).toISOString();
   const { data: recent } = await store
     .from("salla_bell_rings")
-    .select("id, created_at")
+    .select("id, created_at, ack_at")
     .eq("device_id", input.deviceId)
     .gte("created_at", since)
+    .is("ack_at", null)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -277,7 +282,7 @@ export async function ring(input: {
     .single();
 
   if (error) return { ok: false, tooSoon: false, error: error.message };
-  return { ok: true, id: String(data.id) };
+  return { ok: true, id: String(data.id), found };
 }
 
 /** What the car park may know: whether somebody is on their way. */

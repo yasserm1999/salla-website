@@ -369,19 +369,34 @@ function Waiting({ ring: r, busy, onComing }: { ring: Ring; busy: boolean; onCom
             </p>
             <ul className="space-y-1">
               {ready.map((o) => (
-                <li key={o.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2">
-                  <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-black uppercase text-white">
-                    Ready
-                  </span>
-                  {o.rack && (
-                    <span className="rounded border-2 border-[#26364d] px-2 py-0.5 text-base font-black text-[#26364d]">
-                      Rack {o.rack}
+                <li key={o.id} className="flex items-center gap-3 rounded-xl bg-emerald-50 px-3 py-2.5">
+                  {/*
+                    The rack first and biggest. It is the only thing on this
+                    card that decides where his feet go; the order number is
+                    what he checks once he is standing there.
+                  */}
+                  <span
+                    className={`grid min-w-20 shrink-0 place-items-center rounded-xl px-2 py-1.5 leading-none ${
+                      o.rack ? "bg-[#26364d] text-white" : "border-2 border-dashed border-[#d8cbbd] text-[#8a9099]"
+                    }`}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-75">
+                      Rack
                     </span>
-                  )}
-                  <span className="text-sm font-semibold text-[#26364d]">#{o.id}</span>
-                  <span className="text-xs text-[#5b6675]">
-                    {o.pieces} pc{o.pieces === 1 ? "" : "s"}
-                    {o.daysOnRack !== null && o.daysOnRack > 0 ? ` · ${o.daysOnRack}d on the rack` : ""}
+                    <span className="text-3xl font-black tabular-nums">{o.rack ?? "—"}</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-black uppercase text-white">
+                        Ready
+                      </span>
+                      <span className="text-base font-bold text-[#26364d]">#{o.id}</span>
+                    </span>
+                    <span className="mt-0.5 block text-xs text-[#5b6675]">
+                      {o.pieces} pc{o.pieces === 1 ? "" : "s"}
+                      {o.daysOnRack !== null && o.daysOnRack > 0 ? ` · ${o.daysOnRack}d on the rack` : ""}
+                      {!o.rack ? " · no rack written on it" : ""}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -399,6 +414,11 @@ function Waiting({ ring: r, busy, onComing }: { ring: Ring; busy: boolean; onCom
                 <li key={o.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-[#f7f3ed] px-3 py-2">
                   <Package className="h-4 w-4 text-[#b9925d]" aria-hidden />
                   <span className="text-sm font-semibold text-[#26364d]">#{o.id}</span>
+                  {o.rack && (
+                    <span className="rounded border border-[#26364d] px-1.5 py-0.5 text-xs font-black text-[#26364d]">
+                      Rack {o.rack}
+                    </span>
+                  )}
                   <span className="text-xs text-[#5b6675]">
                     {o.pieces} pc{o.pieces === 1 ? "" : "s"} · {dueWord(o.when)}
                   </span>

@@ -61,8 +61,12 @@ bell rang and that somebody is coming.
 
 ## Rules
 
-- One ring per device every **2 minutes**. Pressing again shows "Bell already rung —
-  we're coming" and keeps watching the first ring.
+- While a ring is unanswered, the same device is held to one ring every **2 minutes**:
+  pressing again shows "Bell already rung — we're coming" and keeps watching the first
+  ring, so the tablet is not buzzed five times for one car.
+- Once somebody taps COMING that ring is finished, and the customer may ring again
+  straight away — being told help is coming and then waiting is exactly when the bell
+  is needed a second time.
 - At most **5 rings per address every 10 minutes** (`BELL_IP_LIMIT`, default 5).
 - Every ring is logged in `salla_bell_rings`: when it rang, whether a customer was
   matched, who answered and when — so response times can be reviewed later.
