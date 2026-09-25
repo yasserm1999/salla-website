@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { askFor, findCustomer, myOrders, openRequests, setPassword, signIn } from "@/lib/account";
+import {
+  askFor,
+  findCustomer,
+  freeSlots,
+  myOrders,
+  openRequests,
+  setPassword,
+  signIn,
+} from "@/lib/account";
 import { currentCustomerId, endCustomer, startCustomer } from "@/lib/customer-session";
 import { shiftDay, shopToday } from "@/lib/pickups";
 
@@ -65,6 +73,14 @@ export async function POST(req: Request) {
     });
   }
 
+  if (what === "slots") {
+    const onDate =
+      typeof body?.onDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.onDate)
+        ? body.onDate
+        : shopToday();
+    return NextResponse.json({ onDate, slots: await freeSlots(onDate) });
+  }
+
   if (what === "ask") {
     const customer = await findCustomer(id);
     if (!customer) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
@@ -74,8 +90,7 @@ export async function POST(req: Request) {
       typeof body?.onDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.onDate)
         ? body.onDate
         : shopToday();
-    const atTime =
-      typeof body?.atTime === "string" && /^\d{2}:\d{2}$/.test(body.atTime) ? body.atTime : null;
+    const atTime = typeof body?.atTime === "string" ? body.atTime : null;
     const note =
       typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 300) : null;
 

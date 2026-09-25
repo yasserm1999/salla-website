@@ -10,6 +10,7 @@ import {
   tidyAddress,
 } from "./cleancloud";
 import { addJob, addPerson, loadSpan, shopToday, shiftDay } from "./pickups";
+import { SLOTS, SLOT_CAPACITY, isSlot } from "./slots";
 
 /**
  * The customer's own side of the shop.
@@ -289,6 +290,50 @@ async function personFor(customer: Customer): Promise<string | null> {
   return made.id;
 }
 
+/**
+ * The hours still open on a given day.
+ *
+ * Three errands an hour is what the van can actually do, so an hour with three
+ * already booked is not offered at all — a customer should not have to discover
+ * that their choice was refused. Collections and deliveries count together,
+ * because the van cannot be in two places whichever it is doing.
+ *
+ * Today loses its hours as they pass. An hour that has already started is no
+ * longer a promise anybody can keep.
+ */
+export async function freeSlots(onDate: string): Promise<string[]> {
+  const board = await loadSpan(onDate, onDate);
+  const taken = new Map<string, number>();
+
+  if (board.ready) {
+    for (const job of board.data.jobs) {
+      if (job.status === "cancelled" || !job.atTime) continue;
+      taken.set(job.atTime, (taken.get(job.atTime) ?? 0) + 1);
+    }
+  }
+
+  const now = new Date();
+  const minutesNow =
+    onDate === shopToday()
+      ? (() => {
+          const hhmm = new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Muscat",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(now);
+          const [h, m] = hhmm.split(":").map(Number);
+          return h * 60 + m;
+        })()
+      : -1;
+
+  return SLOTS.filter((slot) => {
+    if ((taken.get(slot) ?? 0) >= SLOT_CAPACITY) return false;
+    const [h, m] = slot.split(":").map(Number);
+    return h * 60 + m > minutesNow;
+  });
+}
+
 export type Asked =
   | { ok: true; message: string }
   | { ok: false; error: string };
@@ -326,6 +371,19 @@ export async function askFor(input: {
   const today = shopToday();
   if (input.onDate < today || input.onDate > shiftDay(today, 14)) {
     return { ok: false, error: "Choose a day within the next two weeks." };
+  }
+
+  if (input.atTime !== null) {
+    if (!isSlot(input.atTime)) return { ok: false, error: "Choose one of the times offered." };
+    /*
+      Checked again here, not only when the list was drawn. Two people can be
+      looking at the same free hour at the same moment, and the second one
+      should be told rather than quietly making a fourth stop.
+    */
+    const free = await freeSlots(input.onDate);
+    if (!free.includes(input.atTime)) {
+      return { ok: false, error: "That time has just been taken. Please choose another." };
+    }
   }
 
   const already = await openRequests(input.customer.id);

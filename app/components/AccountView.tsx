@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { slotLabel } from "@/lib/slots";
 import {
   CalendarClock,
   Check,
@@ -51,7 +52,7 @@ const WORDS = {
     signInBlurb: "Sign in with your customer number or your mobile, and the password the shop gave you.",
     who: "Customer number or mobile",
     password: "Password",
-    passwordHint: "Your first name, then @, then your customer number — for example Ahmed@216",
+    passwordHint: "The password the shop gave you. Ask us if you do not have it.",
     signIn: "Sign in",
     signingIn: "Signing in…",
     hello: "Hello",
@@ -79,7 +80,9 @@ const WORDS = {
     note: "Anything we should know? (optional)",
     notePlaceholder: "Flat number, best time to call…",
     day: "Day",
-    time: "Time — leave blank for any",
+    time: "Choose a time",
+    noSlots: "No times left on that day. Please choose another day.",
+    loadingSlots: "Looking for free times…",
     send: "Yes, please come",
     sending: "Sending…",
     cancel: "Not now",
@@ -102,7 +105,7 @@ const WORDS = {
     signInBlurb: "سجّل الدخول برقم العميل أو رقم هاتفك، وكلمة المرور التي أعطاك إياها المحل.",
     who: "رقم العميل أو الهاتف",
     password: "كلمة المرور",
-    passwordHint: "اسمك الأول ثم @ ثم رقم العميل — مثال: Ahmed@216",
+    passwordHint: "كلمة المرور التي أعطاك إياها المحل. اسألنا إن لم تكن لديك.",
     signIn: "دخول",
     signingIn: "جارٍ الدخول…",
     hello: "أهلاً",
@@ -130,7 +133,9 @@ const WORDS = {
     note: "هل من ملاحظة؟ (اختياري)",
     notePlaceholder: "رقم الشقة، أفضل وقت للاتصال…",
     day: "اليوم",
-    time: "الوقت — اتركه فارغاً لأي وقت",
+    time: "اختر الوقت",
+    noSlots: "لا توجد أوقات متاحة في هذا اليوم. اختر يوماً آخر.",
+    loadingSlots: "جارٍ عرض الأوقات المتاحة…",
     send: "نعم، تفضلوا",
     sending: "جارٍ الإرسال…",
     cancel: "ليس الآن",
@@ -524,6 +529,33 @@ function AskSheet({
   const [day, setDay] = useState(me.today);
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
+  const [slots, setSlots] = useState<string[] | null>(null);
+
+  /*
+    The hours are asked for rather than assumed: another customer may have
+    taken the last place in an hour while this sheet was open, and an hour the
+    van cannot do should never be offered.
+  */
+  useEffect(() => {
+    let alive = true;
+    setSlots(null);
+    setTime("");
+    void fetch("/api/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ what: "slots", onDate: day }),
+    })
+      .then((r) => (r.ok ? r.json() : { slots: [] }))
+      .then((d) => {
+        if (alive) setSlots(Array.isArray(d.slots) ? d.slots : []);
+      })
+      .catch(() => {
+        if (alive) setSlots([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [day]);
 
   const heading = ask.pickDay ? t.confirmLater : ask.kind === "pickup" ? t.confirmPick : t.confirmBring;
 
@@ -548,33 +580,50 @@ function AskSheet({
         </p>
 
         {ask.pickDay && (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
-                {t.day}
-              </span>
-              <input
-                type="date"
-                value={day}
-                min={me.today}
-                max={me.until}
-                onChange={(e) => setDay(e.target.value)}
-                className="w-full rounded-2xl border border-[#d8cbbd] px-4 py-3 text-base outline-none focus:border-[#d8b98a]"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
-                {t.time}
-              </span>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-2xl border border-[#d8cbbd] px-4 py-3 text-base outline-none focus:border-[#d8b98a]"
-              />
-            </label>
-          </div>
+          <label className="mt-4 block">
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
+              {t.day}
+            </span>
+            <input
+              type="date"
+              value={day}
+              min={me.today}
+              max={me.until}
+              onChange={(e) => setDay(e.target.value)}
+              className="w-full rounded-2xl border border-[#d8cbbd] px-4 py-3 text-base outline-none focus:border-[#d8b98a]"
+            />
+          </label>
         )}
+
+        {/* The hours themselves: big enough for a thumb, and only the free ones. */}
+        <div className="mt-4">
+          <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#8a9099]">{t.time}</p>
+          {slots === null ? (
+            <p className="py-3 text-sm text-[#8a9099]">{t.loadingSlots}</p>
+          ) : slots.length === 0 ? (
+            <p className="rounded-2xl bg-[#fdf6e9] px-4 py-3 text-sm font-semibold text-[#8a6a2e]">
+              {t.noSlots}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {slots.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => setTime(slot)}
+                  aria-pressed={time === slot}
+                  className={`rounded-2xl border px-2 py-3 text-sm font-bold tabular-nums transition ${
+                    time === slot
+                      ? "border-[#26364d] bg-[#26364d] text-white"
+                      : "border-[#d8cbbd] bg-white text-[#26364d]"
+                  }`}
+                >
+                  {slotLabel(slot, lang)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <label className="mt-4 block">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
@@ -591,7 +640,7 @@ function AskSheet({
         <div className="mt-5 grid gap-2">
           <button
             onClick={() => onSend(ask.pickDay ? day : me.today, time || null, note || null)}
-            disabled={busy}
+            disabled={busy || !time}
             className="rounded-2xl bg-[#26364d] py-4 text-base font-black text-white disabled:opacity-60"
           >
             {busy ? t.sending : t.send}
