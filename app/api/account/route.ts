@@ -3,6 +3,7 @@ import {
   askFor,
   findCustomer,
   freeSlots,
+  isNearby,
   myOrders,
   openRequests,
   setPassword,
@@ -68,6 +69,8 @@ export async function POST(req: Request) {
         : null,
       orders,
       waiting,
+      /* In our own building: no hour to wait, so nothing to promise. */
+      nearby: isNearby(id),
       today: shopToday(),
       until: shiftDay(shopToday(), 14),
     });

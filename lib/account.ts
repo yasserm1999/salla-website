@@ -36,6 +36,22 @@ function db(): SupabaseClient | null {
   return client;
 }
 
+/**
+ * Customers the van does not have to drive to.
+ *
+ * People in the shop's own building are collected from within minutes, so
+ * promising them an hour would be a strange thing to say. Their customer
+ * numbers live in NEARBY_CUSTOMERS, comma separated, and can be changed
+ * without touching this file.
+ */
+export function isNearby(customerId: string): boolean {
+  return (process.env.NEARBY_CUSTOMERS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .includes(customerId);
+}
+
 export type Customer = {
   id: string;
   name: string | null;

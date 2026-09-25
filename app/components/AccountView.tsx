@@ -41,6 +41,8 @@ type Me = {
   customer: { id: string; name: string | null; tel: string | null; place: string | null } | null;
   orders: Order[];
   waiting: Waiting[];
+  /** In the shop's own building: the van is there in minutes. */
+  nearby: boolean;
   today: string;
   until: string;
 };
@@ -66,15 +68,16 @@ const WORDS = {
     due: "promised",
     waitingForYou: "waiting for you",
     daysHere: "with us since",
-    pickNow: "Collect my clothes today",
-    pickNowBlurb: "The van comes to you and takes your washing away.",
-    bring: "Bring my order to me",
-    bringBlurb: "We deliver what is ready to your address.",
-    later: "Book another day",
-    laterBlurb: "Choose the day that suits you.",
-    confirmPick: "Shall we collect from you today?",
-    confirmBring: "Shall we bring your order today?",
-    confirmLater: "Which day shall we come?",
+    pickNow: "PICKUP NOW",
+    pickNowBlurb: "We come and take your laundry.",
+    bring: "DELIVER NOW",
+    bringBlurb: "We bring your ready order to you.",
+    later: "SCHEDULE A PICKUP",
+    laterBlurb: "Choose the day and the time.",
+    confirmPick: "Pickup now?",
+    confirmBring: "Deliver now?",
+    confirmLater: "When shall we come?",
+    wait: "The driver usually reaches you within an hour.",
     place: "We will come to",
     noPlace: "We will call you to agree where to come.",
     note: "Anything we should know? (optional)",
@@ -119,15 +122,16 @@ const WORDS = {
     due: "الموعد",
     waitingForYou: "بانتظارك",
     daysHere: "لدينا منذ",
-    pickNow: "استلام ملابسي اليوم",
-    pickNowBlurb: "تأتي المركبة إليك وتأخذ الغسيل.",
-    bring: "أحضروا طلبي إليّ",
-    bringBlurb: "نوصّل ما هو جاهز إلى عنوانك.",
-    later: "حجز يوم آخر",
-    laterBlurb: "اختر اليوم المناسب لك.",
-    confirmPick: "هل نأتي لاستلام ملابسك اليوم؟",
-    confirmBring: "هل نُحضر طلبك اليوم؟",
-    confirmLater: "في أي يوم نأتي؟",
+    pickNow: "استلام الآن",
+    pickNowBlurb: "نأتي إليك ونأخذ الغسيل.",
+    bring: "توصيل الآن",
+    bringBlurb: "نوصّل طلبك الجاهز إليك.",
+    later: "حجز موعد استلام",
+    laterBlurb: "اختر اليوم والوقت.",
+    confirmPick: "استلام الآن؟",
+    confirmBring: "توصيل الآن؟",
+    confirmLater: "متى نأتي؟",
+    wait: "يصل السائق إليك عادةً خلال ساعة تقريباً.",
     place: "سنأتي إلى",
     noPlace: "سنتصل بك للاتفاق على المكان.",
     note: "هل من ملاحظة؟ (اختياري)",
@@ -537,6 +541,7 @@ function AskSheet({
     van cannot do should never be offered.
   */
   useEffect(() => {
+    if (!ask.pickDay) return;
     let alive = true;
     setSlots(null);
     setTime("");
@@ -555,7 +560,7 @@ function AskSheet({
     return () => {
       alive = false;
     };
-  }, [day]);
+  }, [day, ask.pickDay]);
 
   const heading = ask.pickDay ? t.confirmLater : ask.kind === "pickup" ? t.confirmPick : t.confirmBring;
 
@@ -579,6 +584,17 @@ function AskSheet({
           )}
         </p>
 
+        {/*
+          How long it takes, said once and plainly. Not said at all to the
+          people in the shop's own building, for whom "now" is a walk down the
+          stairs rather than a drive.
+        */}
+        {!ask.pickDay && !me.nearby && (
+          <p className="mt-2 rounded-2xl bg-[#fdf6e9] px-4 py-3 text-sm font-bold leading-6 text-[#8a6a2e]">
+            {t.wait}
+          </p>
+        )}
+
         {ask.pickDay && (
           <label className="mt-4 block">
             <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
@@ -596,6 +612,7 @@ function AskSheet({
         )}
 
         {/* The hours themselves: big enough for a thumb, and only the free ones. */}
+        {ask.pickDay && (
         <div className="mt-4">
           <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#8a9099]">{t.time}</p>
           {slots === null ? (
@@ -624,6 +641,7 @@ function AskSheet({
             </div>
           )}
         </div>
+        )}
 
         <label className="mt-4 block">
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#8a9099]">
@@ -640,7 +658,7 @@ function AskSheet({
         <div className="mt-5 grid gap-2">
           <button
             onClick={() => onSend(ask.pickDay ? day : me.today, time || null, note || null)}
-            disabled={busy || !time}
+            disabled={busy || (ask.pickDay && !time)}
             className="rounded-2xl bg-[#26364d] py-4 text-base font-black text-white disabled:opacity-60"
           >
             {busy ? t.sending : t.send}
