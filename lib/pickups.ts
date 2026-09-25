@@ -401,12 +401,16 @@ export async function addJob(input: {
     Somebody who cannot see the pickup they just booked presses the button
     again, and the shop ends up driving to one house three times. The first
     booking stands and is named back, so it is plain the round already has it.
+
+    Judged per kind: collecting from a house in the morning and bringing
+    washing back to it in the evening are two errands, not one repeated.
   */
   const { data: already } = await db
     .from("salla_jobs")
     .select("at_time, salla_people (name)")
     .eq("person_id", input.personId)
     .eq("on_date", input.onDate)
+    .eq("kind", input.kind)
     .in("status", ["waiting", "out"])
     .limit(1);
 
