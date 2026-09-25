@@ -25,6 +25,10 @@ export type PickupRow = {
   atTime: string | null;
   /** The day it is booked for. Collections are not all for today. */
   onDate: string;
+  /** What the van is coming for: to collect, or to bring washing back. */
+  kind: "pickup" | "delivery";
+  /** Asked for by the customer from their own account, not written up here. */
+  fromCustomer: boolean;
   status: string;
   everyDays: number | null;
   note: string | null;
@@ -1240,8 +1244,18 @@ function PickupLine({ pickup, at }: { pickup: PickupRow; at: number }) {
       : `${((time / 60) % 12 === 0 ? 12 : Math.floor(time / 60) % 12)}:${String(time % 60).padStart(2, "0")}${time < 720 ? "am" : "pm"}`;
 
   return (
-    <li className="flex items-start gap-2.5 bg-sky-50/50 px-3 py-2.5">
-      <span className="w-5 shrink-0 pt-1 text-xs font-bold text-sky-600">{at}.</span>
+    <li
+      className={`flex items-start gap-2.5 px-3 py-2.5 ${
+        pickup.kind === "delivery" ? "bg-violet-50/60" : "bg-sky-50/50"
+      }`}
+    >
+      <span
+        className={`w-5 shrink-0 pt-1 text-xs font-bold ${
+          pickup.kind === "delivery" ? "text-violet-600" : "text-sky-600"
+        }`}
+      >
+        {at}.
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-base font-black text-[#26364d]">
@@ -1250,9 +1264,19 @@ function PickupLine({ pickup, at }: { pickup: PickupRow; at: number }) {
           <span className="truncate font-medium text-[#26364d]">{pickup.name}</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="rounded bg-sky-600 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-            Collect
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white ${
+              pickup.kind === "delivery" ? "bg-violet-600" : "bg-sky-600"
+            }`}
+          >
+            {pickup.kind === "delivery" ? "Deliver" : "Collect"}
           </span>
+
+          {pickup.fromCustomer && (
+            <span className="rounded border border-[#b9925d] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#b9925d]">
+              Customer asked
+            </span>
+          )}
 
           {pickup.phone && (
             <a
@@ -1264,6 +1288,17 @@ function PickupLine({ pickup, at }: { pickup: PickupRow; at: number }) {
           )}
         </div>
         {pickup.address && <p className="mt-1 truncate text-xs text-[#8a9099]">{pickup.address}</p>}
+        {/*
+          Whatever was written when the errand was arranged. It was being
+          stored and shown nowhere on this page, which made the note field
+          look broken — and a note on a collection is usually the one thing
+          the driver could not work out for himself.
+        */}
+        {pickup.note && (
+          <p className="mt-1.5 rounded-lg bg-[#fdf6e9] px-2.5 py-1.5 text-xs font-semibold leading-5 text-[#8a6a2e]">
+            {pickup.note}
+          </p>
+        )}
       </div>
       <PickupMark pickup={pickup} />
     </li>

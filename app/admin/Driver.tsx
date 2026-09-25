@@ -79,6 +79,8 @@ export type PickupRow = {
   atTime: string | null;
   /** The day it is booked for — the van is told about tomorrow as well. */
   onDate: string;
+  kind: "pickup" | "delivery";
+  fromCustomer: boolean;
   status: string;
   note: string | null;
 };
@@ -396,8 +398,12 @@ function PickupCard({
       <span className="w-1.5 shrink-0 bg-sky-500" />
       <div className="min-w-0 flex-1 px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="rounded bg-sky-600 px-2 py-0.5 text-xs font-black uppercase tracking-wider text-white">
-            Collect
+          <span
+            className={`rounded px-2 py-0.5 text-xs font-black uppercase tracking-wider text-white ${
+              pickup.kind === "delivery" ? "bg-violet-600" : "bg-sky-600"
+            }`}
+          >
+            {pickup.kind === "delivery" ? "Deliver" : "Collect"}
           </span>
           <span className="text-2xl font-black leading-none text-[#26364d]">
             {time ?? <span className="text-base text-[#b8b1a8]">any time</span>}
@@ -416,7 +422,15 @@ function PickupCard({
             {pickup.address}
           </a>
         )}
-        {pickup.note && <p className="mt-1 text-xs text-[#546d83]">{pickup.note}</p>}
+        {/*
+          The note, given the weight it is written with. Grey small print under
+          an address is exactly where "ring the bell, do not knock" goes unread.
+        */}
+        {pickup.note && (
+          <p className="mt-2 rounded-lg border border-[#e7c98f] bg-[#fdf6e9] px-3 py-2 text-sm font-bold leading-6 text-[#8a6a2e]">
+            {pickup.note}
+          </p>
+        )}
         {pickup.phone && (
           <a
             href={`tel:${pickup.phone.replace(/[^\d+]/g, "")}`}

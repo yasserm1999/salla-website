@@ -239,11 +239,56 @@ async function remembered<T>(key: string, work: () => Promise<T>): Promise<T> {
   return value;
 }
 
-export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Order[]> {
+/** One window, exactly as asked for. */
+async function ordersWindow(dateFrom: string, dateTo: string): Promise<Order[]> {
   return remembered(`orders:${dateFrom}:${dateTo}`, async () => {
     const data = await post("getOrders", { dateFrom, dateTo });
     return (Array.isArray(data?.Orders) ? data.Orders : []).map(toOrder);
   });
+}
+
+/**
+ * Orders between two dates, however many there are.
+ *
+ * CleanCloud refuses a range holding more than about a thousand orders —
+ * "Requesting too many orders in one request" — and says so however long the
+ * range is. A shop that keeps trading eventually crosses that line, and the
+ * page that crossed it first was the customer book, which reads the whole
+ * history on purpose.
+ *
+ * So a refusal is not an error here but an instruction: halve the range and
+ * ask again. Empty years answer immediately and cost nothing, and each half
+ * is cached on its own, so the same window asked for by another page is free.
+ */
+export async function fetchOrders(dateFrom: string, dateTo: string): Promise<Order[]> {
+  try {
+    return await ordersWindow(dateFrom, dateTo);
+  } catch (e) {
+    const tooMany = e instanceof CleanCloudError && /too many orders/i.test(e.message);
+    const days = Math.round(
+      (Date.parse(`${dateTo}T12:00:00Z`) - Date.parse(`${dateFrom}T12:00:00Z`)) / DAY
+    );
+    // Three days that cannot be read are a real fault, not a big range.
+    if (!tooMany || days < 3) throw e;
+
+    const middle = new Date(
+      Date.parse(`${dateFrom}T12:00:00Z`) + Math.floor(days / 2) * DAY
+    )
+      .toISOString()
+      .slice(0, 10);
+    const nextDay = new Date(Date.parse(`${middle}T12:00:00Z`) + DAY).toISOString().slice(0, 10);
+
+    const [earlier, later] = await Promise.all([
+      fetchOrders(dateFrom, middle),
+      fetchOrders(nextDay, dateTo),
+    ]);
+
+    // Both halves are inclusive of their own edges, so nothing is counted
+    // twice; the map is belt and braces for a shop that renumbers an order.
+    const all = new Map<string, Order>();
+    for (const o of [...earlier, ...later]) all.set(o.id, o);
+    return [...all.values()];
+  }
 }
 
 /**

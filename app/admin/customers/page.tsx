@@ -10,9 +10,13 @@ export const metadata = { title: "Salla — customers" };
 
 /**
  * Rhythm needs history, so this page reads the shop's whole life rather than
- * the dashboard's recent window. It is one request and, at six hundred orders,
- * a cheap one — and an average gap worked out from the last few weeks would
- * mistake every monthly customer for a lapsed one.
+ * the dashboard's recent window — an average gap worked out from the last few
+ * weeks would mistake every monthly customer for a lapsed one.
+ *
+ * It was one request until the shop passed a thousand orders, at which point
+ * CleanCloud began refusing the range outright and the page showed nothing at
+ * all. fetchOrders now halves a range it is refused and asks again, so this
+ * stays a single call here however long the shop trades.
  */
 const FROM_THE_BEGINNING = "2015-01-01";
 

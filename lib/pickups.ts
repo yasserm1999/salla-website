@@ -67,6 +67,8 @@ export type Job = {
   person: Person;
   /** Set when this came from a standing arrangement rather than by hand. */
   routineId: string | null;
+  /** True when the customer asked for it themselves, from their own account. */
+  fromCustomer: boolean;
   everyDays: number | null;
 };
 
@@ -250,7 +252,7 @@ export async function loadSpan(
     db
       .from("salla_jobs")
       .select(
-        "id, kind, status, at_time, on_date, note, reason, out_at, done_at, by_staff, routine_id, salla_people (id, name, phone, address, note, cleancloud_id)"
+        "id, kind, status, at_time, on_date, note, reason, out_at, done_at, by_staff, routine_id, from_customer, salla_people (id, name, phone, address, note, cleancloud_id)"
       )
       .gte("on_date", from)
       .lte("on_date", to),
@@ -282,6 +284,7 @@ export async function loadSpan(
       byStaff: j.by_staff ?? null,
       person: toPerson(j.salla_people as unknown as PersonRow),
       routineId: j.routine_id ?? null,
+      fromCustomer: Boolean(j.from_customer),
       everyDays: j.routine_id ? (everyDaysById.get(j.routine_id) ?? null) : null,
     }))
     .sort(byTime);
@@ -385,6 +388,9 @@ export async function addJob(input: {
   onDate: string;
   atTime?: string | null;
   note?: string | null;
+  /** Asked for by the customer, from their own account, rather than written
+      down by somebody in the shop. */
+  fromCustomer?: boolean;
 }): Promise<Wrote> {
   const db = client();
   if (!db) return { ok: false, error: "Supabase is not configured." };
@@ -421,6 +427,7 @@ export async function addJob(input: {
     on_date: input.onDate,
     at_time: input.atTime || null,
     note: input.note?.trim() || null,
+    from_customer: !!input.fromCustomer,
   });
 
   if (error) return fail(error);

@@ -24,6 +24,7 @@ const navLinks: NavLink[] = [
   { href: "/team", arHref: "/ar/team", label: "Our Team", labelAr: "فريقنا", hidden: true },
   { href: "/tracker", arHref: "/ar/tracker", label: "Track Order", labelAr: "تتبّع الطلب" },
   { href: "/bell", arHref: "/ar/bell", label: "Ring the Bell", labelAr: "اطلب الخدمة" },
+  { href: "/account", arHref: "/ar/account", label: "My Account", labelAr: "حسابي" },
   { href: "/contact", arHref: "/ar/contact", label: "Contact Us", labelAr: "تواصل معنا" },
   { href: "/feedback", arHref: "/ar/feedback", label: "Feedback", labelAr: "ملاحظاتك" },
 ];

@@ -68,7 +68,7 @@ export default async function AdminPage() {
           today={today}
           states={states}
           pickups={forDriver.data.jobs
-            .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
+            .filter((j) => j.status !== "cancelled")
             .map((j) => ({
               id: j.id,
               name: j.person.name,
@@ -76,6 +76,8 @@ export default async function AdminPage() {
               address: j.person.address,
               atTime: j.atTime,
               onDate: j.onDate,
+              kind: j.kind,
+              fromCustomer: j.fromCustomer,
               status: j.status,
               note: j.note,
             }))}
@@ -164,7 +166,7 @@ export default async function AdminPage() {
         reviewsReady={seen.ready}
         names={names}
         pickups={pickupBoard.data.jobs
-          .filter((j) => j.kind === "pickup" && j.status !== "cancelled")
+          .filter((j) => j.status !== "cancelled")
           .map((j) => ({
             id: j.id,
             name: j.person.name,
@@ -172,6 +174,8 @@ export default async function AdminPage() {
             address: j.person.address,
             atTime: j.atTime,
             onDate: j.onDate,
+            kind: j.kind,
+            fromCustomer: j.fromCustomer,
             status: j.status,
             everyDays: j.everyDays,
             note: j.note,
