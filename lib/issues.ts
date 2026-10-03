@@ -34,6 +34,12 @@ export type Issue = {
   raisedAt: string;
   status: IssueStatus;
   assignedTo: string[];
+  /** The day it is to be done, and the hour, once somebody has said. */
+  dueOn: string | null;
+  dueTime: string | null;
+  /** When whoever is doing it said they had started. */
+  startedAt: string | null;
+  startedBy: string | null;
   closedBy: string | null;
   closedAt: string | null;
   notes: Note[];
@@ -69,7 +75,7 @@ export async function loadIssues(mine?: string): Promise<IssueStore> {
   let query = db
     .from("salla_issues")
     .select(
-      "id, kind, description, amount, customer_id, customer_name, photo_path, raised_by, raised_at, status, assigned_to, closed_by, closed_at"
+      "id, kind, description, amount, customer_id, customer_name, photo_path, raised_by, raised_at, status, assigned_to, due_on, due_time, started_at, started_by, closed_by, closed_at"
     )
     .order("raised_at", { ascending: false })
     .limit(200);
@@ -127,6 +133,10 @@ export async function loadIssues(mine?: string): Promise<IssueStore> {
       raisedAt: String(r.raised_at),
       status: String(r.status) as IssueStatus,
       assignedTo: Array.isArray(r.assigned_to) ? r.assigned_to.map(String) : [],
+      dueOn: (r.due_on as string) ?? null,
+      dueTime: (r.due_time as string) ?? null,
+      startedAt: (r.started_at as string) ?? null,
+      startedBy: (r.started_by as string) ?? null,
       closedBy: r.closed_by ?? null,
       closedAt: r.closed_at ?? null,
       notes: byIssue.get(String(r.id)) ?? [],
@@ -224,8 +234,16 @@ export async function assign(issueId: string, to: string[], by: string): Promise
     .eq("id", issueId)
     .single();
 
+  /*
+    Assigning is not starting.
+
+    Handing somebody a job does not mean they have picked it up, and marking it
+    "doing" the moment it is assigned leaves nobody able to tell the difference
+    between work in hand and work merely allotted. It stays open until the
+    person says they have started.
+  */
   const patch: Record<string, unknown> = { assigned_to: to };
-  if (to.length > 0 && current?.status === "open") patch.status = "doing";
+  void current;
 
   const { error } = await db.from("salla_issues").update(patch).eq("id", issueId);
   if (error) return fail(error);
@@ -233,6 +251,51 @@ export async function assign(issueId: string, to: string[], by: string): Promise
     ok: true,
     message: to.length ? `Assigned to ${to.join(" and ")}.` : "Nobody assigned.",
   };
+}
+
+/**
+ * When it is to be done.
+ *
+ * A job with somebody's name on it and no day is a wish. Giving it a day puts
+ * it on that person's own screen for that morning, beside the deliveries and
+ * the collections, where they will actually see it.
+ */
+/** Whether this job is one of somebody's own. */
+export async function isAssigned(issueId: string, who: string): Promise<boolean> {
+  const db = client();
+  if (!db) return false;
+  const { data } = await db
+    .from("salla_issues")
+    .select("assigned_to")
+    .eq("id", issueId)
+    .maybeSingle();
+  const to = Array.isArray(data?.assigned_to) ? (data!.assigned_to as unknown[]).map(String) : [];
+  return to.includes(who);
+}
+
+export async function schedule(
+  issueId: string,
+  dueOn: string | null,
+  dueTime: string | null,
+  by: string
+): Promise<Wrote> {
+  const db = client();
+  if (!db) return { ok: false, error: "Supabase is not configured." };
+
+  const { error } = await db
+    .from("salla_issues")
+    .update({ due_on: dueOn, due_time: dueTime })
+    .eq("id", issueId);
+
+  if (error) return fail(error);
+
+  await addNote(
+    issueId,
+    dueOn ? `Set for ${dueOn}${dueTime ? ` at ${dueTime}` : ""}.` : "Day cleared.",
+    by
+  );
+
+  return { ok: true, message: dueOn ? "Put on the day." : "Taken off the day." };
 }
 
 export async function setStatus(
@@ -244,6 +307,11 @@ export async function setStatus(
   if (!db) return { ok: false, error: "Supabase is not configured." };
 
   const patch: Record<string, unknown> = { status };
+  // Who picked it up and when — the same two taps the van's work uses.
+  if (status === "doing") {
+    patch.started_at = new Date().toISOString();
+    patch.started_by = by;
+  }
   if (status === "done") {
     patch.closed_by = by;
     patch.closed_at = new Date().toISOString();

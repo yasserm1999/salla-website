@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { slotLabel } from "@/lib/slots";
 import {
-  CalendarClock,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -68,12 +67,14 @@ const WORDS = {
     due: "promised",
     waitingForYou: "waiting for you",
     daysHere: "with us since",
-    pickNow: "PICKUP NOW",
-    pickNowBlurb: "We come and take your laundry.",
-    bring: "DELIVER NOW",
-    bringBlurb: "We bring your ready order to you.",
     later: "SCHEDULE A PICKUP",
-    laterBlurb: "Choose the day and the time.",
+    laterBlurb: "Choose the day and the time that suit you.",
+    alreadyWithUs: "Your clothes are already with us?",
+    whichOrder: "Which order shall we bring?",
+    allReady: "Everything that is ready",
+    nothingReady: "Nothing of yours is ready yet. Choose a time and we will bring whatever is finished by then.",
+    bring: "SCHEDULE A DELIVERY",
+    bringBlurb: "We bring your washing back to you.",
     confirmPick: "Pickup now?",
     confirmBring: "Deliver now?",
     confirmLater: "When shall we come?",
@@ -122,12 +123,14 @@ const WORDS = {
     due: "الموعد",
     waitingForYou: "بانتظارك",
     daysHere: "لدينا منذ",
-    pickNow: "استلام الآن",
-    pickNowBlurb: "نأتي إليك ونأخذ الغسيل.",
-    bring: "توصيل الآن",
-    bringBlurb: "نوصّل طلبك الجاهز إليك.",
     later: "حجز موعد استلام",
-    laterBlurb: "اختر اليوم والوقت.",
+    laterBlurb: "اختر اليوم والوقت المناسبين لك.",
+    alreadyWithUs: "ملابسك لدينا بالفعل؟",
+    whichOrder: "أي طلب نُحضر لك؟",
+    allReady: "كل ما هو جاهز",
+    nothingReady: "لا يوجد لديك طلب جاهز بعد. اختر الوقت وسنُحضر ما يكون جاهزاً حينها.",
+    bring: "حجز موعد توصيل",
+    bringBlurb: "نُعيد إليك غسيلك في الموعد الذي تختاره.",
     confirmPick: "استلام الآن؟",
     confirmBring: "توصيل الآن؟",
     confirmLater: "متى نأتي؟",
@@ -325,19 +328,28 @@ export default function AccountView({ lang }: { lang: "en" | "ar" }) {
           </p>
         )}
 
-        {/* ── The three things to press ──────────────────────────── */}
-        <div className="mt-5 space-y-3">
+        {/*
+          One thing to do, and one thing to do instead.
+
+          Nearly everybody who opens this wants their washing collected, so
+          that is the whole-width button. Having it brought back is a different
+          errand for a different week, and sits under a line that asks the
+          question those customers are actually answering.
+        */}
+        <div className="mt-5">
           <Choice
-            icon={<Truck className="h-7 w-7" aria-hidden />}
-            title={t.pickNow}
-            blurb={t.pickNowBlurb}
+            icon={<Truck className="h-8 w-8" aria-hidden />}
+            title={t.later}
+            blurb={t.laterBlurb}
             tone="navy"
             rtl={rtl}
             onClick={() => {
               setSaid(null);
-              setAsk({ kind: "pickup", pickDay: false });
+              setAsk({ kind: "pickup", pickDay: true });
             }}
           />
+
+          <p className="mt-6 mb-2 text-sm font-semibold text-[#5b6675]">{t.alreadyWithUs}</p>
           <Choice
             icon={<PackageCheck className="h-7 w-7" aria-hidden />}
             title={t.bring}
@@ -350,18 +362,7 @@ export default function AccountView({ lang }: { lang: "en" | "ar" }) {
             rtl={rtl}
             onClick={() => {
               setSaid(null);
-              setAsk({ kind: "delivery", pickDay: false });
-            }}
-          />
-          <Choice
-            icon={<CalendarClock className="h-7 w-7" aria-hidden />}
-            title={t.later}
-            blurb={t.laterBlurb}
-            tone="plain"
-            rtl={rtl}
-            onClick={() => {
-              setSaid(null);
-              setAsk({ kind: "pickup", pickDay: true });
+              setAsk({ kind: "delivery", pickDay: true });
             }}
           />
         </div>
@@ -534,6 +535,9 @@ function AskSheet({
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
   const [slots, setSlots] = useState<string[] | null>(null);
+  const ready = me.orders.filter((o) => o.state === "ready");
+  /* Empty means everything ready — which is what most people mean. */
+  const [chosen, setChosen] = useState<string[]>([]);
 
   /*
     The hours are asked for rather than assumed: another customer may have
@@ -562,7 +566,7 @@ function AskSheet({
     };
   }, [day, ask.pickDay]);
 
-  const heading = ask.pickDay ? t.confirmLater : ask.kind === "pickup" ? t.confirmPick : t.confirmBring;
+  const heading = ask.kind === "pickup" ? t.confirmLater : t.confirmBring;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/50 p-3 sm:place-items-center">
@@ -574,15 +578,71 @@ function AskSheet({
       >
         <h2 className="text-xl font-black text-[#26364d]">{heading}</h2>
 
-        <p className="mt-3 rounded-2xl bg-[#f7f3ed] px-4 py-3 text-sm leading-6 text-[#26364d]">
-          {me.customer?.place ? (
-            <>
-              <span className="font-bold">{t.place}:</span> {me.customer.place}
-            </>
-          ) : (
-            t.noPlace
-          )}
-        </p>
+{/*
+          Where to come is only a question when we are coming to fetch
+          something. Bringing an order back goes to the address it was taken
+          from, so asking again is a question with no purpose.
+        */}
+        {ask.kind === "pickup" && (
+          <p className="mt-3 rounded-2xl bg-[#f7f3ed] px-4 py-3 text-sm leading-6 text-[#26364d]">
+            {me.customer?.place ? (
+              <>
+                <span className="font-bold">{t.place}:</span> {me.customer.place}
+              </>
+            ) : (
+              t.noPlace
+            )}
+          </p>
+        )}
+
+        {ask.kind === "delivery" && (
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-[#8a9099]">
+              {t.whichOrder}
+            </p>
+            {ready.length === 0 ? (
+              <p className="rounded-2xl bg-[#f7f3ed] px-4 py-3 text-sm leading-6 text-[#5b6675]">
+                {t.nothingReady}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {ready.map((o) => {
+                  const on = chosen.includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() =>
+                        setChosen(on ? chosen.filter((x) => x !== o.id) : [...chosen, o.id])
+                      }
+                      aria-pressed={on}
+                      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-start transition ${
+                        on ? "border-[#26364d] bg-[#26364d] text-white" : "border-[#d8cbbd] bg-white"
+                      }`}
+                    >
+                      <span
+                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 ${
+                          on ? "border-white bg-white text-[#26364d]" : "border-[#d8cbbd]"
+                        }`}
+                      >
+                        {on ? <Check className="h-4 w-4" aria-hidden /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-base font-black">#{o.id}</span>
+                        <span className={`block text-xs ${on ? "text-white/75" : "text-[#8a9099]"}`}>
+                          {o.pieces} {t.pieces}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+                {chosen.length === 0 && (
+                  <p className="text-xs text-[#8a9099]">{t.allReady}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/*
           How long it takes, said once and plainly. Not said at all to the
@@ -657,7 +717,20 @@ function AskSheet({
 
         <div className="mt-5 grid gap-2">
           <button
-            onClick={() => onSend(ask.pickDay ? day : me.today, time || null, note || null)}
+            onClick={() =>
+              onSend(
+                ask.pickDay ? day : me.today,
+                time || null,
+                [
+                  ask.kind === "delivery" && chosen.length
+                    ? `${lang === "ar" ? "الطلبات" : "Orders"}: ${chosen.map((id) => `#${id}`).join(", ")}`
+                    : null,
+                  note.trim() || null,
+                ]
+                  .filter(Boolean)
+                  .join(" — ") || null
+              )
+            }
             disabled={busy || (ask.pickDay && !time)}
             className="rounded-2xl bg-[#26364d] py-4 text-base font-black text-white disabled:opacity-60"
           >

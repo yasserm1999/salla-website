@@ -42,6 +42,7 @@ const when = (iso: string) =>
 export function Issues({
   issues,
   people,
+  everyone,
   staff,
   role,
   ready,
@@ -49,6 +50,8 @@ export function Issues({
 }: {
   issues: Issue[];
   people: Person[];
+  /** Everybody with an account here, so a job can go to whoever does it. */
+  everyone: string[];
   staff: string;
   role: "owner" | "manager" | "driver" | "washer";
   ready: boolean;
@@ -161,6 +164,7 @@ export function Issues({
 
       {tab === "open" && (
         <IssueList
+          everyone={everyone}
           issues={live}
           role={role}
           staff={staff}
@@ -172,6 +176,7 @@ export function Issues({
 
       {tab === "done" && (
         <IssueList
+          everyone={everyone}
           issues={finished}
           role={role}
           staff={staff}
@@ -188,6 +193,7 @@ type Send = (body: Record<string, unknown>, key: string) => Promise<boolean>;
 
 function IssueList({
   issues,
+  everyone,
   role,
   staff,
   busy,
@@ -195,6 +201,7 @@ function IssueList({
   empty,
 }: {
   issues: Issue[];
+  everyone: string[];
   role: "owner" | "manager" | "driver" | "washer";
   staff: string;
   busy: string | null;
@@ -211,19 +218,21 @@ function IssueList({
   return (
     <div className="space-y-3">
       {issues.map((i) => (
-        <IssueCard key={i.id} issue={i} role={role} staff={staff} busy={busy} send={send} />
+        <IssueCard key={i.id} everyone={everyone} issue={i} role={role} staff={staff} busy={busy} send={send} />
       ))}
     </div>
   );
 }
 
 function IssueCard({
+  everyone,
   issue,
   role,
   staff,
   busy,
   send,
 }: {
+  everyone: string[];
   issue: Issue;
   role: "owner" | "manager" | "driver" | "washer";
   staff: string;
@@ -315,13 +324,15 @@ function IssueCard({
         </ul>
       )}
 
+      {owner && issue.status !== "done" && <WhenRow issue={issue} send={send} busy={busy} />}
+
       {owner && (
         <div className="border-t border-[#f0e9df] px-4 py-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#b8b1a8]">
               Assign
             </span>
-            {["yasser", "osama"].map((who) => {
+            {everyone.map((who) => {
               const on = issue.assignedTo.includes(who);
               return (
                 <button
@@ -634,5 +645,75 @@ function RaiseForm({ people, busy, send }: { people: Person[]; busy: string | nu
         {busy === "raise" ? "Sending…" : isMoney(kind) ? "Submit the expense" : "Send it"}
       </button>
     </section>
+  );
+}
+
+
+/**
+ * When the job is wanted.
+ *
+ * A day puts it on that person's own screen for that morning, next to the
+ * deliveries and the collections. Without one it sits on this page only, which
+ * is where jobs go to be forgotten.
+ */
+function WhenRow({
+  issue,
+  send,
+  busy,
+}: {
+  issue: Issue;
+  send: (body: Record<string, unknown>, key: string) => void;
+  busy: string | null;
+}) {
+  const [day, setDay] = useState(issue.dueOn ?? "");
+  const [time, setTime] = useState(issue.dueTime ?? "");
+
+  return (
+    <div className="border-t border-[#f0e9df] px-4 py-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-[#b8b1a8]">
+          Do it on
+        </span>
+        <input
+          type="date"
+          value={day}
+          onChange={(e) => setDay(e.target.value)}
+          className="rounded-lg border border-[#d8cbbd] px-2.5 py-1.5 text-sm outline-none focus:border-[#d8b98a]"
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="rounded-lg border border-[#d8cbbd] px-2.5 py-1.5 text-sm outline-none focus:border-[#d8b98a]"
+        />
+        <button
+          onClick={() => send({ what: "when", id: issue.id, dueOn: day || null, dueTime: time || null }, issue.id)}
+          disabled={!!busy}
+          className="rounded-lg bg-[#26364d] px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50"
+        >
+          Save
+        </button>
+        {issue.dueOn && (
+          <button
+            onClick={() => {
+              setDay("");
+              setTime("");
+              send({ what: "when", id: issue.id, dueOn: null, dueTime: null }, issue.id);
+            }}
+            disabled={!!busy}
+            className="text-xs font-bold uppercase tracking-wider text-[#b9925d] hover:underline disabled:opacity-50"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {issue.dueOn && (
+        <p className="mt-1.5 text-xs text-[#546d83]">
+          On {issue.assignedTo.length ? issue.assignedTo.join(" and ") : "nobody"}&rsquo;s screen for{" "}
+          {issue.dueOn}
+          {issue.dueTime ? ` at ${issue.dueTime}` : ""}.
+        </p>
+      )}
+    </div>
   );
 }

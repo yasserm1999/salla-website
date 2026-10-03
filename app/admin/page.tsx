@@ -20,6 +20,8 @@ import {
   type StopState,
 } from "@/lib/delivery";
 import { loadSpan, shiftDay } from "@/lib/pickups";
+import { loadIssues } from "@/lib/issues";
+import { KIND_LABEL } from "@/lib/issue-kinds";
 import { loadSeen } from "@/lib/reviews";
 import { knownNames } from "@/lib/pickups";
 import { Board } from "./Board";
@@ -59,7 +61,10 @@ export default async function AdminPage() {
       const states: Record<string, StopState> = {};
       for (const [id, p] of progress) states[id] = p.state;
 
-      const forDriver = await loadSpan(today, shiftDay(today, 1));
+      const [forDriver, jobs] = await Promise.all([
+        loadSpan(today, shiftDay(today, 1)),
+        loadIssues(staff.name),
+      ]);
 
       return (
         <Driver
@@ -80,6 +85,27 @@ export default async function AdminPage() {
               fromCustomer: j.fromCustomer,
               status: j.status,
               note: j.note,
+            }))}
+          /*
+            Jobs given to this person for today, or overdue, or with no day on
+            them at all — anything still owed, so nothing is lost by being
+            scheduled badly.
+          */
+          tasks={(jobs.ready ? jobs.issues : [])
+            .filter(
+              (i) =>
+                i.status !== "done" &&
+                i.assignedTo.includes(staff.name) &&
+                (!i.dueOn || i.dueOn <= today)
+            )
+            .map((i) => ({
+              id: i.id,
+              kind: KIND_LABEL[i.kind],
+              description: i.description,
+              dueTime: i.dueTime,
+              status: i.status,
+              raisedBy: i.raisedBy,
+              photoUrl: i.photoUrl,
             }))}
           storeReady={events.ready}
           storeProblem={events.ready ? null : events.reason}

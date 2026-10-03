@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentStaff } from "@/lib/admin-session";
+import { currentStaff, staffNames } from "@/lib/admin-session";
 import { loadIssues } from "@/lib/issues";
 import { loadDay, shopToday } from "@/lib/pickups";
 import { Issues } from "./Issues";
@@ -35,6 +35,7 @@ export default async function IssuesPage() {
         phone: p.phone,
         cleanCloudId: p.cleanCloudId,
       }))}
+      everyone={staffNames()}
       staff={staff.name}
       role={staff.role}
       ready={store.ready}

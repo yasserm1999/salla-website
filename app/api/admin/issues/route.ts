@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
-import { currentStaff } from "@/lib/admin-session";
-import { raiseIssue, addNote, assign, setStatus, KINDS, type IssueKind, type IssueStatus } from "@/lib/issues";
+import { currentStaff, staffNames } from "@/lib/admin-session";
+import {
+  raiseIssue,
+  addNote,
+  assign,
+  isAssigned,
+  schedule,
+  setStatus,
+  KINDS,
+  type IssueKind,
+  type IssueStatus,
+} from "@/lib/issues";
 
 export const dynamic = "force-dynamic";
 
-/** The two people who can act on what is raised. */
-const OWNERS = ["yasser", "osama"];
+
 
 const STATUSES: IssueStatus[] = ["open", "doing", "done"];
 
@@ -59,13 +68,22 @@ export async function POST(req: Request) {
       : NextResponse.json({ error: res.error }, { status: 500 });
   }
 
-  // Everything below decides what the shop does next, so it is the owners'.
-  if (staff.role !== "owner") {
-    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
-  }
-
   const id = text(body?.id, 60);
   if (!id) return NextResponse.json({ error: "Which one?" }, { status: 400 });
+
+  /*
+    Who may act on a job.
+
+    Deciding what the shop does next — who it goes to, and when — is the
+    owners'. Saying "I have started" and "it is done" belongs to whoever was
+    given it, which is the whole point of giving it to them.
+  */
+  const owner = staff.role === "owner";
+  const mine = owner ? true : await isAssigned(id, staff.name);
+  const decides = what === "status" || what === "note" ? owner || mine : owner;
+  if (!decides) {
+    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
+  }
 
   if (what === "note") {
     const note = text(body?.body);
@@ -77,10 +95,23 @@ export async function POST(req: Request) {
   }
 
   if (what === "assign") {
+    // Anybody with an account here can be given a job, not only the owners.
+    const everyone = staffNames();
     const to = Array.isArray(body?.to)
-      ? body.to.filter((x: unknown): x is string => typeof x === "string" && OWNERS.includes(x))
+      ? body.to.filter((x: unknown): x is string => typeof x === "string" && everyone.includes(x))
       : [];
     const res = await assign(id, to, staff.name);
+    return res.ok
+      ? NextResponse.json({ success: true, message: res.message })
+      : NextResponse.json({ error: res.error }, { status: 500 });
+  }
+
+  if (what === "when") {
+    const onDay =
+      typeof body?.dueOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dueOn) ? body.dueOn : null;
+    const atTime =
+      typeof body?.dueTime === "string" && /^\d{2}:\d{2}$/.test(body.dueTime) ? body.dueTime : null;
+    const res = await schedule(id, onDay, onDay ? atTime : null, staff.name);
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
       : NextResponse.json({ error: res.error }, { status: 500 });
