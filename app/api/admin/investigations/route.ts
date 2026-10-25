@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentStaff } from "@/lib/admin-session";
-import { closeCase, reopenCase } from "@/lib/investigations";
+import { closeCase, reopenCase, OUTCOMES, type Outcome } from "@/lib/investigations";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +28,30 @@ export async function POST(req: Request) {
       ? new Date(body.lastOrderAt)
       : null;
 
-  const result = await closeCase(customerId, lastOrderAt, staff.name);
+  /*
+    What they said when we rang. A problem is the one answer worth writing
+    down in their own words, so it is the one that keeps a note.
+  */
+  const outcome = OUTCOMES.includes(body?.outcome) ? (body.outcome as Outcome) : null;
+  const note =
+    typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 1000) : null;
+
+  const result = await closeCase(
+    customerId,
+    lastOrderAt,
+    staff.name,
+    outcome,
+    outcome === "had_a_problem" ? note : note
+  );
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
 
-  return NextResponse.json({ success: true, by: staff.name, at: new Date().toISOString() });
+  return NextResponse.json({
+    success: true,
+    by: staff.name,
+    at: new Date().toISOString(),
+    outcome,
+    note,
+  });
 }
 
 export async function DELETE(req: Request) {

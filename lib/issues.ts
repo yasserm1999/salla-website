@@ -260,6 +260,51 @@ export async function assign(issueId: string, to: string[], by: string): Promise
  * it on that person's own screen for that morning, beside the deliveries and
  * the collections, where they will actually see it.
  */
+/**
+ * The jobs somebody has been given.
+ *
+ * Not the same question as loadIssues(mine), which answers "what did this
+ * person report". A washer reports faults and a driver is given them, and the
+ * two lists have almost nothing in common.
+ */
+export async function jobsFor(who: string): Promise<Issue[]> {
+  const db = client();
+  if (!db) return [];
+
+  const { data, error } = await db
+    .from("salla_issues")
+    .select(
+      "id, kind, description, amount, customer_id, customer_name, photo_path, raised_by, raised_at, status, assigned_to, due_on, due_time, started_at, started_by, closed_by, closed_at"
+    )
+    .contains("assigned_to", [who])
+    .neq("status", "done")
+    .order("due_on", { ascending: true, nullsFirst: false })
+    .limit(50);
+
+  if (error || !data) return [];
+
+  return data.map((r) => ({
+    id: String(r.id),
+    kind: r.kind as IssueKind,
+    description: String(r.description),
+    customerId: (r.customer_id as string) ?? null,
+    customerName: (r.customer_name as string) ?? null,
+    amount: r.amount === null || r.amount === undefined ? null : String(r.amount),
+    photoUrl: null,
+    raisedBy: String(r.raised_by),
+    raisedAt: String(r.raised_at),
+    status: r.status as IssueStatus,
+    assignedTo: Array.isArray(r.assigned_to) ? r.assigned_to.map(String) : [],
+    dueOn: (r.due_on as string) ?? null,
+    dueTime: (r.due_time as string) ?? null,
+    startedAt: (r.started_at as string) ?? null,
+    startedBy: (r.started_by as string) ?? null,
+    closedBy: (r.closed_by as string) ?? null,
+    closedAt: (r.closed_at as string) ?? null,
+    notes: [],
+  }));
+}
+
 /** Whether this job is one of somebody's own. */
 export async function isAssigned(issueId: string, who: string): Promise<boolean> {
   const db = client();

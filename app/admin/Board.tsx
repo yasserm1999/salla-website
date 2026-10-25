@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
+import type { CheckMark } from "@/lib/quality";
+import { QualityTick, type QualityContext } from "./QualityTick";
+
+const shopDayOf = (d: Date | string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Muscat" }).format(new Date(d));
 
 /** An order written up that nobody has read yet. */
 export type UnreadOrder = {
@@ -171,6 +176,7 @@ export function Board({
   reviewsReady,
   names,
   role,
+  quality,
 }: {
   board: BoardData;
   runs: Run[];
@@ -190,9 +196,39 @@ export function Board({
   role: "owner" | "manager";
   /** Customer numbers to names, from the shop's own book. */
   names: Record<string, string>;
+  /** Quality checks on the orders shown, and who may sign one off. */
+  quality: {
+    ready: boolean;
+    problem: string | null;
+    marks: Record<string, CheckMark>;
+    staff: string[];
+    /** Orders marked ready before this shop day are not chased for a check. */
+    since: string;
+  };
 }) {
   const router = useRouter();
   const s = summary;
+  const [marks, setMarks] = useState(quality.marks);
+  const qc: QualityContext = {
+    ready: quality.ready,
+    problem: quality.problem,
+    owner: role === "owner",
+    staff: quality.staff,
+  };
+  const setMark = (orderId: string, mark: CheckMark | null) =>
+    setMarks((m) => {
+      const next = { ...m };
+      if (mark) next[orderId] = mark;
+      else delete next[orderId];
+      return next;
+    });
+  /*
+    Marked ready in CleanCloud — the customer has been told — and nobody has
+    signed the bag off. The list the shop most wants to be empty.
+  */
+  const readyUnchecked = board.groups.ready.filter(
+    (o) => !marks[o.id] && o.cleanedAt && shopDayOf(o.cleanedAt) >= quality.since
+  );
   const [open, setOpen] = useState<Record<string, boolean>>({
     late: true,
     today: true,
@@ -379,6 +415,12 @@ export function Board({
                 className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
               >
                 Customers
+              </Link>
+              <Link
+                href="/admin/quality"
+                className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+              >
+                Quality
               </Link>
             </>
           )}
@@ -906,13 +948,61 @@ export function Board({
                     <p className="px-4 py-4 text-center text-sm text-[#8a9099]">Nothing here.</p>
                   ) : (
                     <ul className="divide-y divide-[#f0e9df]">
-                      {rows.slice(0, 80).map((o) => (
+                      {rows.slice(0, 80).map((o) => orderRow(o, band.bar, key === "ready"))}
+                    </ul>
+                  )}
+                  {rows.length > 80 && (
+                    <p className="px-4 py-2 text-xs text-[#8a9099]">Showing 80 of {rows.length}.</p>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      {/*
+        Below the list, not inside it: these are already on the rack and the
+        customer already has their message, so this is the shop catching up on
+        itself rather than work still to do.
+      */}
+      {readyUnchecked.length > 0 && (
+        <section className="mt-3 overflow-hidden rounded-xl border border-orange-300 bg-orange-50">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-orange-500 px-2 text-sm font-bold text-white">
+              {readyUnchecked.length}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-[#26364d]">Ready, not checked</span>
+              <span className="block text-xs text-[#546d83]">
+                Marked ready in CleanCloud with no quality check. Checking one now is logged as late.
+              </span>
+            </span>
+          </div>
+          <ul className="divide-y divide-orange-100 border-t border-orange-200 bg-orange-50/60">
+            {readyUnchecked.slice(0, 80).map((o) => orderRow(o, "bg-orange-400", true))}
+          </ul>
+        </section>
+      )}
+
+      <p className="mt-6 text-xs text-[#b8b1a8]">
+        Orders taken in between {board.windowFrom} and {board.windowTo}, read live from
+        CleanCloud each time this page loads. Dates and hours are the shop&rsquo;s own —
+        Oman time, not the server&rsquo;s.
+      </p>
+    </main>
+  );
+
+  /** One order, one line, ending in its amount and the quality circle. */
+  function orderRow(o: Assessed, bar: string, onRack: boolean) {
+    return (
                         <li key={o.id}>
+                          <div className="flex items-center gap-x-2 pe-3 hover:bg-white">
                           <button
                             onClick={() => setExpanded(expanded === o.id ? null : o.id)}
-                            className="flex w-full items-start gap-x-3 px-4 py-2.5 text-left hover:bg-white"
+                            className="flex min-w-0 flex-1 items-start gap-x-3 py-2.5 ps-4 text-left"
                           >
-                            <span className={`h-9 w-1 shrink-0 rounded ${band.bar}`} />
+                            <span className={`h-9 w-1 shrink-0 rounded ${bar}`} />
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5 text-sm font-semibold text-[#26364d]">
                                 {nameOf(o)}
@@ -946,7 +1036,7 @@ export function Board({
                             <span className="hidden shrink-0 text-sm font-black text-[#26364d] sm:block">
                               {whenLabel(o)}
                             </span>
-                            {key === "ready" && o.daysOnRack !== null && (
+                            {onRack && o.daysOnRack !== null && (
                               <span className="hidden shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 sm:block">
                                 {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on rack`}
                               </span>
@@ -960,28 +1050,19 @@ export function Board({
                               {money(o.total)}
                             </span>
                           </button>
+                          {/* Beside the row, not inside it: a button cannot hold another button. */}
+                          <QualityTick
+                            order={o}
+                            customerName={nameOf(o)}
+                            mark={marks[o.id]}
+                            ctx={qc}
+                            onChange={setMark}
+                          />
+                          </div>
                           {expanded === o.id && <Detail o={o} name={nameOf(o)} tel={telOf(o)} />}
                         </li>
-                      ))}
-                    </ul>
-                  )}
-                  {rows.length > 80 && (
-                    <p className="px-4 py-2 text-xs text-[#8a9099]">Showing 80 of {rows.length}.</p>
-                  )}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-
-      <p className="mt-6 text-xs text-[#b8b1a8]">
-        Orders taken in between {board.windowFrom} and {board.windowTo}, read live from
-        CleanCloud each time this page loads. Dates and hours are the shop&rsquo;s own —
-        Oman time, not the server&rsquo;s.
-      </p>
-    </main>
-  );
+    );
+  }
 }
 
 /**

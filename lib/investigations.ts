@@ -16,12 +16,30 @@ import { createClient } from "@supabase/supabase-js";
 
 const TABLE = "salla_customer_investigations";
 
+/**
+ * What the customer said when somebody rang them.
+ *
+ * Three answers, because in practice there are three: they mean to come back,
+ * they have gone somewhere else, or something went wrong. The third is the one
+ * worth the telephone call, so it is the one that carries a note.
+ */
+export const OUTCOMES = ["coming_back", "gone_elsewhere", "had_a_problem"] as const;
+export type Outcome = (typeof OUTCOMES)[number];
+
+export const OUTCOME_LABEL: Record<Outcome, string> = {
+  coming_back: "Said they will come back",
+  gone_elsewhere: "Using another laundry",
+  had_a_problem: "Had a problem with us",
+};
+
 export type Investigation = {
   customerId: string;
   /** Their last order at the moment the case was closed. */
   lastOrderAt: string | null;
   by: string;
   at: string;
+  outcome: Outcome | null;
+  note: string | null;
 };
 
 export type InvestigationStore =
@@ -46,7 +64,7 @@ export async function loadInvestigations(): Promise<InvestigationStore> {
 
   const { data, error } = await db
     .from(TABLE)
-    .select("customer_id, last_order_at, investigated_by, investigated_at");
+    .select("customer_id, last_order_at, investigated_by, investigated_at, outcome, note");
 
   if (error) {
     if (isMissingTable(error.code)) {
@@ -65,6 +83,8 @@ export async function loadInvestigations(): Promise<InvestigationStore> {
       lastOrderAt: row.last_order_at ?? null,
       by: String(row.investigated_by ?? ""),
       at: String(row.investigated_at ?? ""),
+      outcome: (row.outcome as Outcome) ?? null,
+      note: (row.note as string) ?? null,
     });
   }
   return { ready: true, marks };
@@ -73,7 +93,9 @@ export async function loadInvestigations(): Promise<InvestigationStore> {
 export async function closeCase(
   customerId: string,
   lastOrderAt: Date | null,
-  by: string
+  by: string,
+  outcome: Outcome | null = null,
+  note: string | null = null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const db = client();
   if (!db) return { ok: false, error: "Supabase is not configured." };
@@ -86,6 +108,8 @@ export async function closeCase(
       last_order_at: lastOrderAt ? lastOrderAt.toISOString() : null,
       investigated_by: by,
       investigated_at: new Date().toISOString(),
+      outcome,
+      note,
     },
     { onConflict: "customer_id" }
   );

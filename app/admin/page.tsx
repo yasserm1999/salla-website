@@ -11,7 +11,10 @@ import {
   shopYmd,
   defaultWindow,
   CleanCloudError,
+  STATUS,
 } from "@/lib/cleancloud";
+import { liveChecks, qualityStaffNames } from "@/lib/quality";
+import { QUALITY_CHECKS_SINCE } from "@/config/quality-staff";
 import {
   loadEvents,
   progressByOrder,
@@ -20,7 +23,7 @@ import {
   type StopState,
 } from "@/lib/delivery";
 import { loadSpan, shiftDay } from "@/lib/pickups";
-import { loadIssues } from "@/lib/issues";
+import { jobsFor } from "@/lib/issues";
 import { KIND_LABEL } from "@/lib/issue-kinds";
 import { loadSeen } from "@/lib/reviews";
 import { knownNames } from "@/lib/pickups";
@@ -63,7 +66,7 @@ export default async function AdminPage() {
 
       const [forDriver, jobs] = await Promise.all([
         loadSpan(today, shiftDay(today, 1)),
-        loadIssues(staff.name),
+        jobsFor(staff.name),
       ]);
 
       return (
@@ -91,13 +94,8 @@ export default async function AdminPage() {
             them at all — anything still owed, so nothing is lost by being
             scheduled badly.
           */
-          tasks={(jobs.ready ? jobs.issues : [])
-            .filter(
-              (i) =>
-                i.status !== "done" &&
-                i.assignedTo.includes(staff.name) &&
-                (!i.dueOn || i.dueOn <= today)
-            )
+          tasks={jobs
+            .filter((i) => !i.dueOn || i.dueOn <= today)
             .map((i) => ({
               id: i.id,
               kind: KIND_LABEL[i.kind],
@@ -116,13 +114,46 @@ export default async function AdminPage() {
     const board = buildBoard(orders);
 
     /*
+      The quality circles: who has checked what, for every order still in the
+      shop. The ready times go along so checks made mid-wash learn when the
+      order was finished. Washers check bags too, so their page gets them.
+    */
+    const inShop = orders.filter((o) => o.status !== STATUS.COLLECTED);
+    const checks = await liveChecks(new Map(inShop.map((o) => [o.id, o.cleanedAt])));
+    const quality = {
+      ready: checks.ready,
+      problem: checks.ready ? null : checks.reason,
+      marks: checks.marks,
+      staff: qualityStaffNames(),
+      since: QUALITY_CHECKS_SINCE,
+    };
+
+    /*
       A washer's page stops here too, and for the same reason: what follows
       reads the takings and builds the debt list, and none of that is his to
       see. He gets the same orders in the same order of urgency, with every
       figure of money absent rather than hidden.
     */
     if (staff.role === "washer") {
-      return <Work board={{ ...board, windowFrom: from, windowTo: to }} worker={staff.name} />;
+      const mine = await jobsFor(staff.name);
+      return (
+        <Work
+          board={{ ...board, windowFrom: from, windowTo: to }}
+          worker={staff.name}
+          quality={quality}
+          tasks={mine
+            .filter((i) => !i.dueOn || i.dueOn <= today)
+            .map((i) => ({
+              id: i.id,
+              kind: KIND_LABEL[i.kind],
+              description: i.description,
+              dueTime: i.dueTime,
+              status: i.status,
+              raisedBy: i.raisedBy,
+              photoUrl: i.photoUrl,
+            }))}
+        />
+      );
     }
 
     const debts = buildDebts(orders);
@@ -191,6 +222,7 @@ export default async function AdminPage() {
         unread={unread}
         reviewsReady={seen.ready}
         names={names}
+        quality={quality}
         pickups={pickupBoard.data.jobs
           .filter((j) => j.status !== "cancelled")
           .map((j) => ({

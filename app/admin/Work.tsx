@@ -1,8 +1,15 @@
 "use client";
 
+import { TaskBlock, type TaskRow } from "./TaskBlock";
+
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Urgency } from "@/lib/cleancloud";
+import type { CheckMark } from "@/lib/quality";
+import { QualityTick, type QualityContext } from "./QualityTick";
+
+const shopDayOf = (d: Date | string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Muscat" }).format(new Date(d));
 
 /**
  * The work, for the person doing it.
@@ -74,13 +81,37 @@ function whenLabel(o: Assessed): string {
 }
 
 export function Work({
+  tasks,
   board,
   worker,
+  quality,
 }: {
+  /** Jobs somebody in the shop has given this person. */
+  tasks: TaskRow[];
   board: BoardData;
   worker: string;
+  /** The same quality circles as the owner's board, without the power to change one. */
+  quality: {
+    ready: boolean;
+    problem: string | null;
+    marks: Record<string, CheckMark>;
+    staff: string[];
+    since: string;
+  };
 }) {
   const router = useRouter();
+  const [marks, setMarks] = useState(quality.marks);
+  const qc: QualityContext = { ready: quality.ready, problem: quality.problem, owner: false, staff: quality.staff };
+  const setMark = (orderId: string, mark: CheckMark | null) =>
+    setMarks((m) => {
+      const next = { ...m };
+      if (mark) next[orderId] = mark;
+      else delete next[orderId];
+      return next;
+    });
+  const readyUnchecked = board.groups.ready.filter(
+    (o) => !marks[o.id] && o.cleanedAt && shopDayOf(o.cleanedAt) >= quality.since
+  );
   const [open, setOpen] = useState<Record<string, boolean>>({ late: true, today: true });
   const [people, setPeople] = useState<Record<string, Person>>({});
 
@@ -151,6 +182,9 @@ export function Work({
         </div>
       </header>
 
+      {/* Anything the shop has asked this person to do today. */}
+      <TaskBlock tasks={tasks} />
+
       {/* Counts only. There is no money anywhere on this page. */}
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Late" value={count("late")} tone={count("late") > 0 ? "bad" : "good"} />
@@ -191,7 +225,46 @@ export function Work({
                     <p className="px-4 py-4 text-center text-sm text-[#8a9099]">Nothing here.</p>
                   ) : (
                     <ul className="divide-y divide-[#f0e9df]">
-                      {rows.slice(0, 80).map((o) => (
+                      {rows.slice(0, 80).map((o) => row(o, slot === "ready"))}
+                    </ul>
+                  )}
+                  {rows.length > 80 && (
+                    <p className="px-4 py-2 text-xs text-[#8a9099]">
+                      and {rows.length - 80} more
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      {/* On the rack, the customer told, and nobody has looked the bag over. */}
+      {readyUnchecked.length > 0 && (
+        <section className="mt-3 overflow-hidden rounded-xl border border-orange-300 bg-orange-50">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-orange-500 px-2 text-sm font-black text-white">
+              {readyUnchecked.length}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-[#26364d]">Ready, not checked</span>
+              <span className="block text-xs text-[#8a9099]">
+                Marked ready in CleanCloud with no quality check. Checking one now is logged as late.
+              </span>
+            </span>
+          </div>
+          <ul className="divide-y divide-orange-100 border-t border-orange-200 bg-orange-50/60">
+            {readyUnchecked.slice(0, 80).map((o) => row(o, true))}
+          </ul>
+        </section>
+      )}
+    </main>
+  );
+
+  /** One order, with the quality circle at the far right. */
+  function row(o: Assessed, onRack: boolean) {
+    return (
                         <li key={o.id} className="flex items-start gap-2.5 px-3 py-2.5">
                           <span className="rounded bg-[#26364d] px-1.5 py-0.5 text-sm font-bold text-white">
                             #{o.id}
@@ -229,7 +302,7 @@ export function Work({
                               {o.pieces > 0 && (
                                 <span className="text-[11px] text-[#b8b1a8]">{o.pieces} pcs</span>
                               )}
-                              {slot === "ready" && o.daysOnRack !== null && (
+                              {onRack && o.daysOnRack !== null && (
                                 <span className="text-[11px] text-emerald-700">
                                   {o.daysOnRack === 0 ? "today" : `${o.daysOnRack}d on the rack`}
                                 </span>
@@ -239,23 +312,18 @@ export function Work({
                               <p className="mt-1 text-xs font-medium text-[#b9925d]">{o.notes}</p>
                             )}
                           </div>
+                          <span className="shrink-0 self-center">
+                            <QualityTick
+                              order={o}
+                              customerName={nameOf(o)}
+                              mark={marks[o.id]}
+                              ctx={qc}
+                              onChange={setMark}
+                            />
+                          </span>
                         </li>
-                      ))}
-                    </ul>
-                  )}
-                  {rows.length > 80 && (
-                    <p className="px-4 py-2 text-xs text-[#8a9099]">
-                      and {rows.length - 80} more
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-    </main>
-  );
+    );
+  }
 }
 
 function Tile({
