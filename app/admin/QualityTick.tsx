@@ -57,21 +57,25 @@ export function QualityTick({
         onClick={() => setOpen(true)}
         aria-label={label}
         title={label}
-        className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 text-xs font-black transition ${
+        /*
+          44px: the size a finger finds without looking, on a tablet propped
+          on the counter and tapped all day.
+        */
+        className={`relative grid h-11 w-11 shrink-0 touch-manipulation place-items-center rounded-full border-[3px] text-lg font-black transition active:scale-95 ${
           mark
             ? "border-emerald-600 bg-emerald-600 text-white"
-            : "border-[#d8cbbd] bg-white text-[#c4bbb0] hover:border-[#8a9099] hover:text-[#8a9099]"
+            : "border-[#cfc3b5] bg-white text-[#b8ada0] hover:border-[#8a9099] hover:text-[#8a9099]"
         }`}
       >
         {mark ? (
           mark.staff.charAt(0).toUpperCase()
         ) : (
-          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
+          <svg viewBox="0 0 16 16" className="h-6 w-6" aria-hidden>
             <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
         {mark?.late && (
-          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
+          <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full bg-orange-500 ring-2 ring-white" />
         )}
       </button>
       {open && (
@@ -128,14 +132,18 @@ function Sheet({
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xs rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
+        className="w-full max-w-sm rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl"
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-bold text-[#26364d]">{title}</p>
-            <p className="truncate text-xs text-[#8a9099]">{subtitle}</p>
+            <p className="text-lg font-bold text-[#26364d]">{title}</p>
+            <p className="truncate text-sm text-[#8a9099]">{subtitle}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="-m-1 rounded-lg p-1 text-[#8a9099] hover:text-[#26364d]">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="-m-2 grid h-11 w-11 place-items-center rounded-xl text-xl text-[#8a9099] hover:bg-[#f7f3ed] hover:text-[#26364d]"
+          >
             ✕
           </button>
         </div>
@@ -219,11 +227,11 @@ function PinPad({
         autoComplete="off"
         maxLength={2}
         placeholder="••"
-        className={`mt-1.5 w-full rounded-xl border-2 px-3 py-3 text-center font-mono text-3xl tracking-[0.6em] text-[#26364d] outline-none ${
+        className={`mt-2 w-full rounded-xl border-2 px-3 py-4 text-center font-mono text-4xl tracking-[0.6em] text-[#26364d] outline-none ${
           error ? "border-red-400" : "border-[#d8cbbd] focus:border-[#26364d]"
         }`}
       />
-      <p className={`mt-2 h-5 text-center text-sm font-bold ${error ? "text-red-700" : "text-[#8a9099]"}`}>
+      <p className={`mt-3 h-6 text-center text-base font-bold ${error ? "text-red-700" : "text-[#8a9099]"}`}>
         {busy ? "Checking…" : error ?? ""}
       </p>
     </form>
