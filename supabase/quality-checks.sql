@@ -55,4 +55,34 @@ create index if not exists salla_quality_corrections_check on salla_quality_corr
 
 alter table salla_quality_corrections enable row level security;
 
+
+-- A member of staff saying a check is wrong: it was somebody else, or nobody.
+--
+-- Only a request. Nothing changes until an owner approves it, and then the
+-- change is made and logged exactly as if the owner had made it themselves.
+
+create table if not exists salla_quality_requests (
+  id            uuid primary key default gen_random_uuid(),
+  check_id      uuid not null references salla_quality_checks (id),
+  order_id      text not null,
+  -- 'reassign' | 'remove'
+  action        text not null,
+  to_staff      text,
+  reason        text,
+  /* Whose code was typed to ask. */
+  requested_by  text not null,
+  requested_at  timestamptz not null default now(),
+  -- 'pending' | 'approved' | 'rejected' | 'closed'
+  status        text not null default 'pending',
+  decided_by    text,
+  decided_at    timestamptz
+);
+
+-- One open question per check at a time.
+create unique index if not exists salla_quality_requests_one_open
+  on salla_quality_requests (check_id) where status = 'pending';
+create index if not exists salla_quality_requests_status on salla_quality_requests (status, requested_at);
+
+alter table salla_quality_requests enable row level security;
+
 notify pgrst, 'reload schema';

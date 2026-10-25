@@ -226,6 +226,7 @@ export function Board({
     Marked ready in CleanCloud — the customer has been told — and nobody has
     signed the bag off. The list the shop most wants to be empty.
   */
+  const waitingChanges = Object.values(marks).filter((m) => m.pending).length;
   const readyUnchecked = board.groups.ready.filter(
     (o) => !marks[o.id] && o.cleanedAt && shopDayOf(o.cleanedAt) >= quality.since
   );
@@ -421,6 +422,14 @@ export function Board({
                 className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
               >
                 Quality
+                {waitingChanges > 0 && (
+                  <span
+                    title="Changes waiting for your approval"
+                    className="ms-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-black text-white"
+                  >
+                    {waitingChanges}
+                  </span>
+                )}
               </Link>
             </>
           )}

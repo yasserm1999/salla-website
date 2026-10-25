@@ -43,8 +43,30 @@ export type Check = {
   corrections: Correction[];
 };
 
+/** A change somebody has asked for, waiting on an owner. */
+export type PendingChange = {
+  id: string;
+  action: "reassign" | "remove";
+  toStaff: string | null;
+  reason: string | null;
+  requestedBy: string;
+  requestedAt: string;
+};
+
 /** What a circle on the board needs to draw itself. */
-export type CheckMark = { id: string; staff: string; at: string; late: boolean };
+export type CheckMark = { id: string; staff: string; at: string; late: boolean; pending: PendingChange | null };
+
+const REQUESTS = "salla_quality_requests";
+const MISSING_REQUESTS = `The ${REQUESTS} table does not exist yet — run the end of supabase/quality-checks.sql.`;
+
+const toPending = (r: Row): PendingChange => ({
+  id: String(r.id),
+  action: r.action === "remove" ? "remove" : "reassign",
+  toStaff: str(r.to_staff),
+  reason: str(r.reason),
+  requestedBy: String(r.requested_by),
+  requestedAt: String(r.requested_at),
+});
 
 function client() {
   const url = process.env.SUPABASE_URL;
@@ -113,7 +135,13 @@ export async function liveChecks(
   const backfill: { id: string; readyAt: string; late: boolean }[] = [];
   for (const r of rows) {
     const orderId = String(r.order_id);
-    marks[orderId] = { id: String(r.id), staff: String(r.staff_name), at: String(r.checked_at), late: Boolean(r.late) };
+    marks[orderId] = {
+      id: String(r.id),
+      staff: String(r.staff_name),
+      at: String(r.checked_at),
+      late: Boolean(r.late),
+      pending: null,
+    };
     const cleaned = readyTimes.get(orderId);
     if (!r.ready_at && cleaned) {
       backfill.push({
@@ -130,6 +158,21 @@ export async function liveChecks(
   for (const b of backfill) {
     const orderId = rows.find((r) => String(r.id) === b.id)?.order_id;
     if (orderId) marks[String(orderId)].late = b.late;
+  }
+
+  // Changes asked for and not yet decided. Without the table, there simply are none.
+  const checkIds = rows.map((r) => String(r.id));
+  const orderOf = new Map(rows.map((r) => [String(r.id), String(r.order_id)]));
+  for (let i = 0; i < checkIds.length; i += 300) {
+    const { data } = await db
+      .from(REQUESTS)
+      .select("*")
+      .in("check_id", checkIds.slice(i, i + 300))
+      .eq("status", "pending");
+    for (const r of (data ?? []) as Row[]) {
+      const orderId = orderOf.get(String(r.check_id));
+      if (orderId && marks[orderId]) marks[orderId].pending = toPending(r);
+    }
   }
   return { ready: true, marks };
 }
@@ -202,7 +245,13 @@ export async function recordCheck(input: {
   }
   return {
     ok: true,
-    mark: { id: String(data.id), staff: String(data.staff_name), at: String(data.checked_at), late: Boolean(data.late) },
+    mark: {
+      id: String(data.id),
+      staff: String(data.staff_name),
+      at: String(data.checked_at),
+      late: Boolean(data.late),
+      pending: null,
+    },
   };
 }
 
@@ -219,6 +268,8 @@ export async function correctCheck(input: {
   toStaff: string | null;
   reason: string | null;
   by: string;
+  /** Close any request still open on this check. Off when the request itself is being applied. */
+  closeRequests?: boolean;
 }): Promise<{ ok: true; mark: CheckMark | null } | { ok: false; status: number; error: string }> {
   const db = client();
   if (!db) return { ok: false, status: 503, error: "Supabase is not configured." };
@@ -252,12 +303,162 @@ export async function correctCheck(input: {
   const upd = await db.from(CHECKS).update(patch).eq("id", input.checkId);
   if (upd.error) return { ok: false, status: 500, error: upd.error.message };
 
+  // Whatever was still being asked about this check has now been answered.
+  if (input.closeRequests !== false) {
+    await db
+      .from(REQUESTS)
+      .update({ status: "closed", decided_by: input.by, decided_at: new Date().toISOString() })
+      .eq("check_id", input.checkId)
+      .eq("status", "pending");
+  }
+
   return {
     ok: true,
     mark:
       input.action === "reassign"
-        ? { id: String(row.id), staff: input.toStaff!, at: String(row.checked_at), late: Boolean(row.late) }
+        ? { id: String(row.id), staff: input.toStaff!, at: String(row.checked_at), late: Boolean(row.late), pending: null }
         : null,
+  };
+}
+
+/**
+ * A member of staff saying a check is wrong.
+ *
+ * Their own code is asked for, so the owner knows who is asking — the login
+ * on a shared tablet says nothing about that. Nothing changes until an owner
+ * says yes.
+ */
+export async function requestChange(input: {
+  checkId: string;
+  action: "reassign" | "remove";
+  toStaff: string | null;
+  reason: string | null;
+  pin: string;
+}): Promise<{ ok: true; pending: PendingChange } | { ok: false; status: number; error: string }> {
+  const asker = staffForPin(input.pin);
+  if (!asker) return { ok: false, status: 401, error: "Invalid code" };
+  const db = client();
+  if (!db) return { ok: false, status: 503, error: "Supabase is not configured." };
+
+  const { data: row, error } = await db.from(CHECKS).select("*").eq("id", input.checkId).maybeSingle();
+  if (error) return { ok: false, status: 500, error: isMissingTable(error.code) ? MISSING : error.message };
+  if (!row || row.removed_at) return { ok: false, status: 404, error: "That check is no longer standing." };
+  if (input.action === "reassign") {
+    if (!input.toStaff || !qualityStaffNames().includes(input.toStaff)) {
+      return { ok: false, status: 400, error: "Choose who actually checked it." };
+    }
+    if (input.toStaff === row.staff_name) return { ok: false, status: 400, error: "It is already theirs." };
+  }
+
+  const { data, error: e } = await db
+    .from(REQUESTS)
+    .insert({
+      check_id: input.checkId,
+      order_id: row.order_id,
+      action: input.action,
+      to_staff: input.action === "reassign" ? input.toStaff : null,
+      reason: input.reason,
+      requested_by: asker,
+    })
+    .select("*")
+    .single();
+  if (e) {
+    if (e.code === "23505") return { ok: false, status: 409, error: "A change is already waiting for approval." };
+    return { ok: false, status: 500, error: isMissingTable(e.code) ? MISSING_REQUESTS : e.message };
+  }
+  return { ok: true, pending: toPending(data as Row) };
+}
+
+/** An owner's yes or no. A yes is made and logged as a correction, naming who asked. */
+export async function decideRequest(input: {
+  requestId: string;
+  approve: boolean;
+  by: string;
+}): Promise<{ ok: true; mark: CheckMark | null; orderId: string } | { ok: false; status: number; error: string }> {
+  const db = client();
+  if (!db) return { ok: false, status: 503, error: "Supabase is not configured." };
+
+  const { data: req, error } = await db.from(REQUESTS).select("*").eq("id", input.requestId).maybeSingle();
+  if (error) return { ok: false, status: 500, error: isMissingTable(error.code) ? MISSING_REQUESTS : error.message };
+  if (!req || req.status !== "pending") return { ok: false, status: 404, error: "That request has already been answered." };
+
+  // Claimed first, so two owners pressing at once cannot both apply it.
+  const claim = await db
+    .from(REQUESTS)
+    .update({ status: input.approve ? "approved" : "rejected", decided_by: input.by, decided_at: new Date().toISOString() })
+    .eq("id", input.requestId)
+    .eq("status", "pending")
+    .select("id");
+  if (claim.error) return { ok: false, status: 500, error: claim.error.message };
+  if (!claim.data?.length) return { ok: false, status: 409, error: "That request has already been answered." };
+
+  const { data: check } = await db.from(CHECKS).select("*").eq("id", req.check_id).maybeSingle();
+  const unchanged: CheckMark | null =
+    check && !check.removed_at
+      ? { id: String(check.id), staff: String(check.staff_name), at: String(check.checked_at), late: Boolean(check.late), pending: null }
+      : null;
+  if (!input.approve) return { ok: true, mark: unchanged, orderId: String(req.order_id) };
+
+  const asked = `Asked by ${req.requested_by}${req.reason ? `: ${req.reason}` : ""}`;
+  const res = await correctCheck({
+    checkId: String(req.check_id),
+    action: req.action === "remove" ? "remove" : "reassign",
+    toStaff: str(req.to_staff),
+    reason: asked,
+    by: input.by,
+    closeRequests: false,
+  });
+  if (!res.ok) {
+    // Put the request back, so it can be answered again once the problem is fixed.
+    await db.from(REQUESTS).update({ status: "pending", decided_by: null, decided_at: null }).eq("id", input.requestId);
+    return res;
+  }
+  return { ok: true, mark: res.mark, orderId: String(req.order_id) };
+}
+
+export type OpenRequest = PendingChange & {
+  orderId: string;
+  checkId: string;
+  currentStaff: string;
+  customerName: string | null;
+  checkedAt: string;
+};
+
+/** Everything waiting on an owner, oldest first. */
+export async function openRequests(): Promise<
+  { ready: true; requests: OpenRequest[] } | { ready: false; reason: string; requests: OpenRequest[] }
+> {
+  const db = client();
+  if (!db) return { ready: false, reason: "Supabase is not configured.", requests: [] };
+  const { data, error } = await db
+    .from(REQUESTS)
+    .select("*")
+    .eq("status", "pending")
+    .order("requested_at")
+    .limit(200);
+  if (error) {
+    return { ready: false, reason: isMissingTable(error.code) ? MISSING_REQUESTS : error.message, requests: [] };
+  }
+  const rows = (data ?? []) as Row[];
+  if (!rows.length) return { ready: true, requests: [] };
+  const { data: checks } = await db
+    .from(CHECKS)
+    .select("id, staff_name, customer_name, checked_at")
+    .in("id", rows.map((r) => String(r.check_id)));
+  const byId = new Map(((checks ?? []) as Row[]).map((c) => [String(c.id), c]));
+  return {
+    ready: true,
+    requests: rows.map((r) => {
+      const c = byId.get(String(r.check_id));
+      return {
+        ...toPending(r),
+        orderId: String(r.order_id),
+        checkId: String(r.check_id),
+        currentStaff: c ? String(c.staff_name) : "—",
+        customerName: c ? str(c.customer_name) : null,
+        checkedAt: c ? String(c.checked_at) : String(r.requested_at),
+      };
+    }),
   };
 }
 
@@ -320,4 +521,78 @@ export async function checkHistory(
     checks: rows.map((r) => toCheck(r, byCheck.get(String(r.id)) ?? [])),
     capped: rows.length >= LIMIT,
   };
+}
+
+/** One line of an answer to "who checked this?". */
+export type Found = {
+  id: string;
+  orderId: string;
+  customerId: string | null;
+  customerName: string | null;
+  staff: string;
+  checkedAt: string;
+  late: boolean;
+};
+
+/**
+ * Who checked it — found by order number, customer number or part of the
+ * customer's name. Only standing checks: a withdrawn one was never anybody's.
+ */
+export async function findChecks(
+  query: string
+): Promise<{ ready: true; found: Found[] } | { ready: false; reason: string; found: Found[] }> {
+  const db = client();
+  if (!db) return { ready: false, reason: "Supabase is not configured.", found: [] };
+  // Commas and brackets mean something to the filter syntax; nobody's name needs them.
+  const q = query.trim().replace(/^#/, "").replace(/[,()*%\\]/g, " ").trim().slice(0, 60);
+  if (!q) return { ready: true, found: [] };
+
+  const tests = [`customer_name.ilike.*${q}*`];
+  if (/^\d+$/.test(q)) tests.push(`order_id.eq.${q}`, `customer_id.eq.${q}`);
+  const { data, error } = await db
+    .from(CHECKS)
+    .select("id, order_id, customer_id, customer_name, staff_name, checked_at, late")
+    .is("removed_at", null)
+    .or(tests.join(","))
+    .order("checked_at", { ascending: false })
+    .limit(100);
+  if (error) return { ready: false, reason: isMissingTable(error.code) ? MISSING : error.message, found: [] };
+  return {
+    ready: true,
+    found: ((data ?? []) as Row[]).map((r) => ({
+      id: String(r.id),
+      orderId: String(r.order_id),
+      customerId: str(r.customer_id),
+      customerName: str(r.customer_name),
+      staff: String(r.staff_name),
+      checkedAt: String(r.checked_at),
+      late: Boolean(r.late),
+    })),
+  };
+}
+
+/** Every standing check ever, counted per person. */
+export async function staffTotals(): Promise<
+  { ready: true; totals: Map<string, { count: number; late: number }> } | { ready: false; reason: string; totals: Map<string, { count: number; late: number }> }
+> {
+  const totals = new Map<string, { count: number; late: number }>();
+  const db = client();
+  if (!db) return { ready: false, reason: "Supabase is not configured.", totals };
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from(CHECKS)
+      .select("id, staff_name, late")
+      .is("removed_at", null)
+      .order("id")
+      .range(from, from + 999);
+    if (error) return { ready: false, reason: isMissingTable(error.code) ? MISSING : error.message, totals };
+    for (const r of (data ?? []) as Row[]) {
+      const t = totals.get(String(r.staff_name)) ?? { count: 0, late: 0 };
+      t.count++;
+      if (r.late) t.late++;
+      totals.set(String(r.staff_name), t);
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return { ready: true, totals };
 }

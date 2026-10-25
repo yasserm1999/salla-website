@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentStaff } from "@/lib/admin-session";
-import { correctCheck, recordCheck } from "@/lib/quality";
+import { correctCheck, decideRequest, recordCheck, requestChange } from "@/lib/quality";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,33 @@ export async function POST(req: Request) {
     });
     return res.ok
       ? NextResponse.json({ success: true, mark: res.mark })
+      : NextResponse.json({ error: res.error }, { status: res.status });
+  }
+
+  // Anyone may ask for a check to be put right; their own code says who asked.
+  if (body?.what === "request") {
+    const checkId = text(body.checkId, 60);
+    const action = body.action === "remove" ? "remove" : body.action === "reassign" ? "reassign" : null;
+    if (!checkId || !action) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
+    const res = await requestChange({
+      checkId,
+      action,
+      toStaff: text(body.toStaff, 40),
+      reason: text(body.reason, 300),
+      pin: typeof body.pin === "string" ? body.pin : "",
+    });
+    return res.ok
+      ? NextResponse.json({ success: true, pending: res.pending })
+      : NextResponse.json({ error: res.error }, { status: res.status });
+  }
+
+  if (body?.what === "decide") {
+    if (staff.role !== "owner") return NextResponse.json({ error: "Only an owner can approve a change." }, { status: 403 });
+    const requestId = text(body.requestId, 60);
+    if (!requestId) return NextResponse.json({ error: "Which request?" }, { status: 400 });
+    const res = await decideRequest({ requestId, approve: body.approve === true, by: staff.name });
+    return res.ok
+      ? NextResponse.json({ success: true, mark: res.mark, orderId: res.orderId })
       : NextResponse.json({ error: res.error }, { status: res.status });
   }
 
