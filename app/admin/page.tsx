@@ -13,7 +13,7 @@ import {
   CleanCloudError,
   STATUS,
 } from "@/lib/cleancloud";
-import { liveChecks, qualityStaffNames } from "@/lib/quality";
+import { liveChecks, qualityShortNames, qualityStaffNames } from "@/lib/quality";
 import { QUALITY_CHECKS_SINCE } from "@/config/quality-staff";
 import {
   loadEvents,
@@ -125,6 +125,7 @@ export default async function AdminPage() {
       problem: checks.ready ? null : checks.reason,
       marks: checks.marks,
       staff: qualityStaffNames(),
+      short: qualityShortNames(),
       since: QUALITY_CHECKS_SINCE,
     };
 

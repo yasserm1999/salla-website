@@ -99,6 +99,12 @@ const toCheck = (r: Row, corrections: Correction[] = []): Check => ({
 /** The names, for menus. The PINs never leave the server. */
 export const qualityStaffNames = () => QUALITY_STAFF.map((s) => s.name);
 
+/** What each person's circle says: their own short label, or the first three letters. */
+export const qualityShortNames = (): Record<string, string> =>
+  Object.fromEntries(
+    QUALITY_STAFF.map((s) => [s.name, (s.short ?? s.name.slice(0, 3)).toUpperCase().slice(0, 3)])
+  );
+
 export function staffForPin(pin: string): string | null {
   const clean = pin.trim();
   if (!/^\d{2}$/.test(clean)) return null;

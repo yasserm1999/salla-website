@@ -8,7 +8,12 @@ import "server-only";
  * add someone or take them off by editing this list and redeploying — checks
  * already saved keep the name they were saved with.
  */
-export const QUALITY_STAFF: { pin: string; name: string }[] = [
+/*
+  `short` is what the green circle shows. Left out, it is the first three
+  letters of the name — enough to tell Sunny from Sonu. Give someone their
+  own (two or three letters) when three letters still clash.
+*/
+export const QUALITY_STAFF: { pin: string; name: string; short?: string }[] = [
   { pin: "12", name: "Sunny" },
   { pin: "34", name: "Basel" },
   { pin: "56", name: "Sonu" },

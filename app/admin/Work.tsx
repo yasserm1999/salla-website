@@ -96,12 +96,13 @@ export function Work({
     problem: string | null;
     marks: Record<string, CheckMark>;
     staff: string[];
+    short: Record<string, string>;
     since: string;
   };
 }) {
   const router = useRouter();
   const [marks, setMarks] = useState(quality.marks);
-  const qc: QualityContext = { ready: quality.ready, problem: quality.problem, owner: false, staff: quality.staff };
+  const qc: QualityContext = { ready: quality.ready, problem: quality.problem, owner: false, staff: quality.staff, short: quality.short };
   const setMark = (orderId: string, mark: CheckMark | null) =>
     setMarks((m) => {
       const next = { ...m };

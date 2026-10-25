@@ -202,6 +202,7 @@ export function Board({
     problem: string | null;
     marks: Record<string, CheckMark>;
     staff: string[];
+    short: Record<string, string>;
     /** Orders marked ready before this shop day are not chased for a check. */
     since: string;
   };
@@ -214,6 +215,7 @@ export function Board({
     problem: quality.problem,
     owner: role === "owner",
     staff: quality.staff,
+    short: quality.short,
   };
   const setMark = (orderId: string, mark: CheckMark | null) =>
     setMarks((m) => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentStaff } from "@/lib/admin-session";
-import { findChecks, openRequests, qualityStaffNames, staffTotals } from "@/lib/quality";
+import { findChecks, openRequests, qualityShortNames, qualityStaffNames, staffTotals } from "@/lib/quality";
 import { Requests } from "./Requests";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function QualityPage({ searchParams }: { searchParams: Prom
 
   const q = ((await searchParams).q ?? "").trim();
   const [totals, found, requests] = await Promise.all([staffTotals(), findChecks(q), openRequests()]);
+  const short = qualityShortNames();
   const problem = !totals.ready ? totals.reason : !found.ready ? found.reason : null;
 
   return (
@@ -51,8 +52,8 @@ export default async function QualityPage({ searchParams }: { searchParams: Prom
           return (
             <div key={name} className="min-w-0 rounded-xl border border-[#ece7e1] bg-white px-4 py-3">
               <p className="flex items-center gap-2 truncate text-base font-bold text-[#26364d]">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-600 text-sm font-black text-white">
-                  {name.charAt(0).toUpperCase()}
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-[11px] font-black tracking-tight text-white">
+                  {short[name]}
                 </span>
                 {name}
               </p>
@@ -99,8 +100,8 @@ export default async function QualityPage({ searchParams }: { searchParams: Prom
                   </p>
                 </div>
                 <span className="flex shrink-0 items-center gap-2 text-base font-bold text-[#26364d]">
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-600 text-base font-black text-white">
-                    {c.staff.charAt(0).toUpperCase()}
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-600 text-[11px] font-black tracking-tight text-white">
+                    {short[c.staff] ?? c.staff.slice(0, 3).toUpperCase()}
                   </span>
                   {c.staff}
                 </span>

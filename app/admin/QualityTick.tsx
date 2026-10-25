@@ -19,6 +19,8 @@ export type QualityContext = {
   problem: string | null;
   owner: boolean;
   staff: string[];
+  /** Name → what the circle says, e.g. SUN, SON. */
+  short: Record<string, string>;
 };
 
 const time = (iso: string) =>
@@ -28,6 +30,9 @@ const time = (iso: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/** Three letters rather than one: Sunny and Sonu are both S. */
+const badge = (ctx: QualityContext, name: string) => ctx.short[name] ?? name.slice(0, 3).toUpperCase();
 
 const shopDay = (d: Date | string | null) =>
   d ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Muscat" }).format(new Date(d)) : null;
@@ -61,14 +66,14 @@ export function QualityTick({
           44px: the size a finger finds without looking, on a tablet propped
           on the counter and tapped all day.
         */
-        className={`relative grid h-11 w-11 shrink-0 touch-manipulation place-items-center rounded-full border-[3px] text-lg font-black transition active:scale-95 ${
+        className={`relative grid h-11 w-11 shrink-0 touch-manipulation place-items-center rounded-full border-[3px] text-[13px] font-black leading-none tracking-tight transition active:scale-95 ${
           mark
             ? "border-emerald-600 bg-emerald-600 text-white"
             : "border-[#cfc3b5] bg-white text-[#b8ada0] hover:border-[#8a9099] hover:text-[#8a9099]"
         } ${mark?.pending ? "ring-4 ring-amber-300" : ""}`}
       >
         {mark ? (
-          mark.staff.charAt(0).toUpperCase()
+          badge(ctx, mark.staff)
         ) : (
           <svg viewBox="0 0 16 16" className="h-6 w-6" aria-hidden>
             <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -306,8 +311,8 @@ function Checked({ mark, ctx, onDone }: { mark: CheckMark; ctx: QualityContext; 
   return (
     <div>
       <p className="flex items-center gap-3 rounded-xl bg-emerald-50 px-3 py-3 text-base text-emerald-800">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-600 text-lg font-black text-white">
-          {mark.staff.charAt(0).toUpperCase()}
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-600 text-[13px] font-black tracking-tight text-white">
+          {badge(ctx, mark.staff)}
         </span>
         <span>
           Checked by <b>{mark.staff}</b>
