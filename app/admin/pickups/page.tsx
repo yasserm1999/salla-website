@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentStaff } from "@/lib/admin-session";
-import { loadRoutines, loadSpan, shiftDay, shopToday } from "@/lib/pickups";
+import { loadAreas, loadRoutines, loadSpan, shiftDay, shopToday } from "@/lib/pickups";
+import { AreaProvider } from "../AreaTag";
 import { Pickups } from "./Pickups";
 
 export const dynamic = "force-dynamic";
@@ -38,14 +39,16 @@ export default async function PickupsPage({
     after it is made.
   */
   const anchor = day > today ? day : today;
-  const [board, routines] = await Promise.all([
+  const [board, routines, areas] = await Promise.all([
     loadSpan(day < today ? day : today, shiftDay(anchor, 13), anchor),
     loadRoutines(today),
+    loadAreas(),
   ]);
 
   const pickups = board.data.jobs.filter((j) => j.kind === "pickup");
 
   return (
+    <AreaProvider book={areas} canEdit={staff.role === "owner" || staff.role === "driver"}>
     <Pickups
       day={day}
       today={today}
@@ -60,5 +63,6 @@ export default async function PickupsPage({
       ready={board.ready}
       problem={board.ready ? null : board.reason}
     />
+    </AreaProvider>
   );
 }

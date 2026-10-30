@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
 import type { CheckMark } from "@/lib/quality";
+import { AreaTag } from "./AreaTag";
 import { QualityTick, type QualityContext } from "./QualityTick";
 
 const shopDayOf = (d: Date | string) =>
@@ -24,6 +25,7 @@ export type UnreadOrder = {
 /** A collection from the shop's own book, drawn beside the deliveries. */
 export type PickupRow = {
   id: string;
+  personId: string;
   name: string;
   phone: string | null;
   address: string | null;
@@ -1354,6 +1356,7 @@ function PickupLine({ pickup, at }: { pickup: PickupRow; at: number }) {
             {label ?? <span className="text-sm font-medium text-[#b8b1a8]">any time</span>}
           </span>
           <span className="truncate font-medium text-[#26364d]">{pickup.name}</span>
+          <AreaTag personId={pickup.personId} name={pickup.name} />
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span
@@ -1448,6 +1451,9 @@ function Tags({ customerID, orderID }: { customerID: string; orderID: string }) 
     <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
       <span className="rounded bg-[#f0e9df] px-1 text-[#546d83]">c{customerID}</span>
       <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">#{orderID}</span>
+      <span className="font-sans">
+        <AreaTag cleanCloudId={customerID} />
+      </span>
     </span>
   );
 }

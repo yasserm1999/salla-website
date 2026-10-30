@@ -22,7 +22,7 @@ import {
   deliveryConcerns,
   type StopState,
 } from "@/lib/delivery";
-import { loadSpan, shiftDay } from "@/lib/pickups";
+import { loadAreas, loadSpan, shiftDay } from "@/lib/pickups";
 import { jobsFor } from "@/lib/issues";
 import { KIND_LABEL } from "@/lib/issue-kinds";
 import { loadSeen } from "@/lib/reviews";
@@ -30,6 +30,7 @@ import { knownNames } from "@/lib/pickups";
 import { Board } from "./Board";
 import { Driver } from "./Driver";
 import { Work } from "./Work";
+import { AreaProvider } from "./AreaTag";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Salla — shop dashboard" };
@@ -64,12 +65,14 @@ export default async function AdminPage() {
       const states: Record<string, StopState> = {};
       for (const [id, p] of progress) states[id] = p.state;
 
-      const [forDriver, jobs] = await Promise.all([
+      const [forDriver, jobs, areas] = await Promise.all([
         loadSpan(today, shiftDay(today, 1)),
         jobsFor(staff.name),
+        loadAreas(),
       ]);
 
       return (
+        <AreaProvider book={areas} canEdit>
         <Driver
           runs={runs}
           driver={staff.name}
@@ -79,6 +82,7 @@ export default async function AdminPage() {
             .filter((j) => j.status !== "cancelled")
             .map((j) => ({
               id: j.id,
+              personId: j.person.id,
               name: j.person.name,
               phone: j.person.phone,
               address: j.person.address,
@@ -108,6 +112,7 @@ export default async function AdminPage() {
           storeReady={events.ready}
           storeProblem={events.ready ? null : events.reason}
         />
+        </AreaProvider>
       );
     }
 
@@ -165,7 +170,7 @@ export default async function AdminPage() {
       The van goes out once. A schedule showing only half of what it has to
       do is a schedule somebody has to hold the other half of in their head.
     */
-    const pickupBoard = await loadSpan(today, shiftDay(today, 1));
+    const [pickupBoard, areas] = await Promise.all([loadSpan(today, shiftDay(today, 1)), loadAreas()]);
 
     /*
       Orders nobody has read yet. Only the last few days count as news — an
@@ -211,6 +216,7 @@ export default async function AdminPage() {
     };
 
     return (
+      <AreaProvider book={areas} canEdit={staff.role === "owner"}>
       <Board
         board={{ ...board, windowFrom: from, windowTo: to }}
         runs={runs}
@@ -228,6 +234,7 @@ export default async function AdminPage() {
           .filter((j) => j.status !== "cancelled")
           .map((j) => ({
             id: j.id,
+            personId: j.person.id,
             name: j.person.name,
             phone: j.person.phone,
             address: j.person.address,
@@ -242,6 +249,7 @@ export default async function AdminPage() {
             doneAt: j.doneAt,
           }))}
       />
+      </AreaProvider>
     );
   } catch (e) {
     const message =

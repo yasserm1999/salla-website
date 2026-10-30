@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentStaff, staffNames } from "@/lib/admin-session";
 import { loadIssues } from "@/lib/issues";
 import { loadDay, shopToday } from "@/lib/pickups";
+import { loadStock } from "@/lib/stock";
 import { Issues } from "./Issues";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ export default async function IssuesPage() {
   if (!staff) redirect("/admin/login");
 
   const owner = staff.role === "owner";
-  const [store, book] = await Promise.all([
+  const [store, book, stock] = await Promise.all([
     loadIssues(owner ? undefined : staff.name),
     // The customer book, for naming who a complaint is about.
     loadDay(shopToday()),
+    loadStock(),
   ]);
 
   return (
@@ -40,6 +42,9 @@ export default async function IssuesPage() {
       role={staff.role}
       ready={store.ready}
       problem={store.ready ? null : store.reason}
+      stock={stock.items}
+      stockReady={stock.ready}
+      stockProblem={stock.ready ? null : stock.reason}
     />
   );
 }

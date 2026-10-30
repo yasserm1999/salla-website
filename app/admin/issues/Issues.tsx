@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KIND_LABEL, KINDS, isMoney, type IssueKind } from "@/lib/issue-kinds";
+import { KIND_LABEL, RAISE_KINDS, isMoney, isScheduled, type IssueKind } from "@/lib/issue-kinds";
 import type { Issue } from "@/lib/issues";
+import type { StockItem } from "@/lib/stock";
+import { Stock } from "./Stock";
 
 /**
  * What is wrong, and what could be better.
@@ -47,6 +49,9 @@ export function Issues({
   role,
   ready,
   problem,
+  stock,
+  stockReady,
+  stockProblem,
 }: {
   issues: Issue[];
   people: Person[];
@@ -56,12 +61,15 @@ export function Issues({
   role: "owner" | "manager" | "driver" | "washer";
   ready: boolean;
   problem: string | null;
+  stock: StockItem[];
+  stockReady: boolean;
+  stockProblem: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [tab, setTab] = useState<"raise" | "open" | "done">(role === "owner" ? "open" : "raise");
+  const [tab, setTab] = useState<"raise" | "open" | "complaints" | "stock" | "done">(role === "owner" ? "open" : "raise");
 
   async function send(body: Record<string, unknown>, key: string) {
     setBusy(key);
@@ -88,8 +96,17 @@ export function Issues({
     return false;
   }
 
-  const live = issues.filter((i) => i.status !== "done");
-  const finished = issues.filter((i) => i.status === "done");
+  /*
+    Customer complaints are a book of their own. They are written down as they
+    come and read back together much later, so mixing them into the to-do list
+    only buried the jobs that need doing today.
+  */
+  const complaints = issues.filter((i) => i.kind === "customer");
+  const work = issues.filter((i) => i.kind !== "customer");
+  const live = work.filter((i) => i.status !== "done");
+  const finished = work.filter((i) => i.status === "done");
+  const unreviewed = complaints.filter((i) => i.status !== "done").length;
+  const low = stock.filter((i) => i.lowAt !== null && i.onHand <= i.lowAt).length;
   const mine = live.filter((i) => i.assignedTo.includes(staff));
 
   return (
@@ -133,7 +150,9 @@ export function Issues({
         {(
           [
             ["raise", "Report something"],
-            ["open", role === "owner" ? `Open (${live.length})` : `Mine (${live.length})`],
+            ["open", role === "owner" ? `To do (${live.length})` : `Mine (${live.length})`],
+            ["complaints", `Complaints (${unreviewed})`],
+            ["stock", low ? `Stock (${low} low)` : "Stock"],
             ["done", `Completed (${finished.length})`],
           ] as const
         ).map(([key, label]) => (
@@ -172,6 +191,26 @@ export function Issues({
           send={send}
           empty="Nothing outstanding."
         />
+      )}
+
+      {tab === "complaints" && (
+        <IssueList
+          everyone={everyone}
+          /* Not yet reviewed first, then the ones already read back. */
+          issues={[
+            ...complaints.filter((i) => i.status !== "done"),
+            ...complaints.filter((i) => i.status === "done"),
+          ]}
+          role={role}
+          staff={staff}
+          busy={busy}
+          send={send}
+          empty="No customer complaints recorded."
+        />
+      )}
+
+      {tab === "stock" && (
+        <Stock items={stock} owner={role === "owner"} ready={stockReady} problem={stockProblem} />
       )}
 
       {tab === "done" && (
@@ -257,7 +296,7 @@ function IssueCard({
         )}
         {issue.status === "done" && (
           <span className="rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-white">
-            {isMoney(issue.kind) ? "✓ Paid" : "✓ Done"}
+            {isMoney(issue.kind) ? "✓ Paid" : issue.kind === "customer" ? "✓ Reviewed" : "✓ Done"}
           </span>
         )}
         {isMoney(issue.kind) && issue.status !== "done" && (
@@ -324,7 +363,7 @@ function IssueCard({
         </ul>
       )}
 
-      {owner && issue.status !== "done" && <WhenRow issue={issue} send={send} busy={busy} />}
+      {owner && issue.status !== "done" && isScheduled(issue.kind) && <WhenRow issue={issue} send={send} busy={busy} />}
 
       {owner && (
         <div className="border-t border-[#f0e9df] px-4 py-3">
@@ -362,7 +401,7 @@ function IssueCard({
             })}
 
             <span className="ms-auto flex gap-1.5">
-              {issue.status !== "doing" && (
+              {issue.status !== "doing" && issue.kind !== "customer" && (
                 <button
                   onClick={() => send({ what: "status", id: issue.id, status: "doing" }, issue.id)}
                   disabled={!!busy}
@@ -377,7 +416,7 @@ function IssueCard({
                   disabled={!!busy}
                   className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {isMoney(issue.kind) ? "Mark paid" : "Mark done"}
+                  {isMoney(issue.kind) ? "Mark paid" : issue.kind === "customer" ? "Mark reviewed" : "Mark done"}
                 </button>
               ) : (
                 <button
@@ -480,7 +519,7 @@ function RaiseForm({ people, busy, send }: { people: Person[]; busy: string | nu
         What is it?
       </p>
       <div className="mb-3 flex flex-wrap gap-1.5">
-        {KINDS.map((k) => (
+        {RAISE_KINDS.map((k) => (
           <button
             key={k}
             onClick={() => setKind(k)}

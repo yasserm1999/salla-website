@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AreaTag, AreaBadge } from "../AreaTag";
 import type { Job, Person, Routine } from "@/lib/pickups";
 
 /**
@@ -217,7 +218,14 @@ export function Pickups({
             ["repeats", `Repeating pickups (${live.length})`],
             ["booked", `Booked in (${open.length}${ahead.length ? ` + ${ahead.length} ahead` : ""})`],
           ] as const
-        ).map(([key, label]) => (
+        )
+          /*
+            The driver books one-off collections and nothing else. Repeats
+            decide what the shop does every week, so they are not his to set,
+            and two tabs he cannot use only make the page harder to read.
+          */
+          .filter(([key]) => role === "owner" || key === "add" || key === "booked")
+          .map(([key, label]) => (
           <button
             key={key}
             onClick={() => {
@@ -233,14 +241,14 @@ export function Pickups({
             {label}
           </button>
         ))}
-        <button
+        {role === "owner" && <button
           onClick={() => send({ what: "syncCustomers" }, "sync")}
           disabled={!!busy}
           className="ms-auto rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#8a9099] hover:border-[#d8b98a] disabled:opacity-50"
           title="Copy the shop&rsquo;s customers across from CleanCloud so they can be searched"
         >
           {busy === "sync" ? "Fetching customers…" : `Customers (${people.length})`}
-        </button>
+        </button>}
       </div>
 
       {panel === "add" && (
@@ -260,10 +268,10 @@ export function Pickups({
           }}
         />
       )}
-      {panel === "repeat" && (
+      {panel === "repeat" && role === "owner" && (
         <RepeatPanel people={people} day={day} busy={busy} send={send} onDone={() => setPanel("booked")} />
       )}
-      {panel === "repeats" && (
+      {panel === "repeats" && role === "owner" && (
         <section className="mb-4">
           <p className="mb-2 text-sm font-bold uppercase tracking-widest text-[#26364d]">
             Repeating pickups — {live.length}
@@ -356,6 +364,7 @@ export function Pickups({
                               </span>
                             ) : null}
                           </span>
+                          <AreaTag personId={j.person.id} name={j.person.name} />
                           {j.everyDays ? (
                             <span className="shrink-0 text-xs font-semibold text-[#b9925d]">repeat</span>
                           ) : null}
@@ -431,6 +440,7 @@ function PickupCard({
         </div>
 
         <p className="mt-1 truncate text-lg font-bold leading-tight text-[#26364d]">{job.person.name}</p>
+        <AreaTag personId={job.person.id} name={job.person.name} big />
         {job.person.address && (
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.person.address)}`}
@@ -547,6 +557,7 @@ function PersonPicker({
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[#26364d] bg-white px-3 py-2">
         <span className="font-bold text-[#26364d]">{chosen.name}</span>
+        <AreaTag personId={chosen.id} name={chosen.name} />
         {chosen.phone && <span className="text-xs text-[#8a9099]">{chosen.phone}</span>}
         <button onClick={() => onPick("")} className="ms-auto text-xs font-semibold text-[#b9925d] hover:underline">
           change
@@ -572,6 +583,7 @@ function PersonPicker({
                 className="flex w-full items-baseline gap-2 px-3 py-2 text-left hover:bg-[#f8f1e7]"
               >
                 <span className="font-semibold text-[#26364d]">{p.name}</span>
+                <AreaBadge personId={p.id} />
                 {p.cleanCloudId && (
                   <span className="font-mono text-[11px] text-[#b8b1a8]">c{p.cleanCloudId}</span>
                 )}

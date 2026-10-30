@@ -671,3 +671,77 @@ export async function knownNames(): Promise<Record<string, string>> {
 export function shopToday(): string {
   return shopYmd(new Date());
 }
+
+/**
+ * Every customer's delivery area, by both ids a page might know them by.
+ *
+ * Read on its own rather than added to the customer queries above, so a shop
+ * that has not yet run supabase/areas.sql loses only the area badges — not
+ * the whole pickup list along with them.
+ */
+export async function loadAreas(): Promise<{
+  byPerson: Record<string, number>;
+  byCleanCloud: Record<string, number>;
+  ready: boolean;
+}> {
+  const empty = { byPerson: {}, byCleanCloud: {}, ready: false };
+  const db = client();
+  if (!db) return empty;
+
+  const { data, error } = await db
+    .from("salla_people")
+    .select("id, cleancloud_id, area")
+    .not("area", "is", null);
+  if (error) return empty;
+
+  const byPerson: Record<string, number> = {};
+  const byCleanCloud: Record<string, number> = {};
+  for (const r of data ?? []) {
+    byPerson[String(r.id)] = Number(r.area);
+    if (r.cleancloud_id) byCleanCloud[String(r.cleancloud_id)] = Number(r.area);
+  }
+  return { byPerson, byCleanCloud, ready: true };
+}
+
+/**
+ * Put a customer in an area, or take them out of one.
+ *
+ * A delivery customer may be known only by their CleanCloud number, never yet
+ * copied into the book; they are added to it here so the area has somewhere
+ * to live.
+ */
+export async function setArea(input: {
+  personId: string | null;
+  cleanCloudId: string | null;
+  name: string | null;
+  area: number | null;
+}): Promise<Wrote> {
+  const db = client();
+  if (!db) return { ok: false, error: "Supabase is not configured." };
+
+  const done: Wrote = {
+    ok: true,
+    message: input.area ? `Set to area ${input.area}.` : "Area cleared.",
+  };
+
+  if (input.personId) {
+    const { error } = await db.from("salla_people").update({ area: input.area }).eq("id", input.personId);
+    return error ? fail(error) : done;
+  }
+  if (!input.cleanCloudId) return { ok: false, error: "Which customer?" };
+
+  const { data: found, error } = await db
+    .from("salla_people")
+    .update({ area: input.area })
+    .eq("cleancloud_id", input.cleanCloudId)
+    .select("id");
+  if (error) return fail(error);
+  if ((found ?? []).length > 0) return done;
+
+  const { error: e } = await db.from("salla_people").insert({
+    name: input.name ?? `Customer ${input.cleanCloudId}`,
+    cleancloud_id: input.cleanCloudId,
+    area: input.area,
+  });
+  return e ? fail(e) : done;
+}

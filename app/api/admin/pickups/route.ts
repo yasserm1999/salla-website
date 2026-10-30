@@ -4,12 +4,14 @@ import {
   addJob,
   addPerson,
   addRoutine,
+  setArea,
   setJobStatus,
   stopRoutine,
   syncCustomers,
   type JobStatus,
 } from "@/lib/pickups";
 import { fetchOrders, defaultWindow } from "@/lib/cleancloud";
+import { isArea } from "@/lib/areas";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +107,24 @@ export async function POST(req: Request) {
     }
 
     const res = await stopRoutine(id, why, staff.name);
+    return res.ok
+      ? NextResponse.json({ success: true, message: res.message })
+      : NextResponse.json({ error: res.error }, { status: 500 });
+  }
+
+  if (what === "area") {
+    // The people who plan the round: the owners and the driver.
+    if (staff.role !== "owner" && staff.role !== "driver") {
+      return NextResponse.json({ error: "Not allowed." }, { status: 403 });
+    }
+    const area = body?.area === null ? null : isArea(body?.area) ? (body.area as number) : undefined;
+    if (area === undefined) return NextResponse.json({ error: "Pick an area from 1 to 7." }, { status: 400 });
+    const res = await setArea({
+      personId: text(body?.personId, 60),
+      cleanCloudId: text(body?.cleanCloudId, 40),
+      name: text(body?.name, 120),
+      area,
+    });
     return res.ok
       ? NextResponse.json({ success: true, message: res.message })
       : NextResponse.json({ error: res.error }, { status: 500 });

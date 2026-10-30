@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Assessed, Run } from "@/lib/cleancloud";
 import { TaskBlock, type TaskRow } from "./TaskBlock";
+import { AreaTag } from "./AreaTag";
 import type { EventKind, StopState } from "@/lib/delivery";
 
 /**
@@ -74,6 +75,7 @@ const timeWindow = (label: string | null) => (label ? label.replace(/\s*-\s*/, "
 /** A collection from the shop's own book, to be done on the same trip. */
 export type PickupRow = {
   id: string;
+  personId: string;
   name: string;
   phone: string | null;
   address: string | null;
@@ -417,6 +419,7 @@ function PickupCard({
         <p className="mt-1.5 truncate text-lg font-bold leading-tight text-[#26364d]">
           {pickup.name}
         </p>
+        <AreaTag personId={pickup.personId} name={pickup.name} big />
         {pickup.address && (
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup.address)}`}
@@ -623,6 +626,7 @@ function Stop({
             </span>
           </p>
           <p className="mt-1.5 truncate text-lg font-bold leading-tight text-[#26364d]">{name}</p>
+          <AreaTag cleanCloudId={stop.customerID} name={person?.name ?? null} big />
           {stop.pieces > 0 && <p className="text-xs text-[#8a9099]">{stop.pieces} pcs</p>}
         </div>
         {owes ? (
