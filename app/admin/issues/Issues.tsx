@@ -704,31 +704,101 @@ function WhenRow({
   send: (body: Record<string, unknown>, key: string) => void;
   busy: string | null;
 }) {
+  /*
+    Taps, not pickers. The phone's own date and time wheels are fiddly on a
+    small screen and nearly every job is today, tomorrow, or the day after —
+    so those are buttons, and the wheels are kept for anything further out.
+  */
+  const ymd = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const DAYS = [
+    { label: "Today", on: ymd(0) },
+    { label: "Tomorrow", on: ymd(1) },
+    { label: new Date(`${ymd(2)}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" }), on: ymd(2) },
+  ];
+  const TIMES = [
+    { label: "Any time", at: "" },
+    { label: "9 am", at: "09:00" },
+    { label: "12 pm", at: "12:00" },
+    { label: "3 pm", at: "15:00" },
+    { label: "6 pm", at: "18:00" },
+  ];
+
+  const [open, setOpen] = useState(false);
   const [day, setDay] = useState(issue.dueOn ?? "");
   const [time, setTime] = useState(issue.dueTime ?? "");
+  const chip = (on: boolean) =>
+    `rounded-lg px-3 py-2.5 text-sm font-bold transition ${
+      on ? "bg-[#26364d] text-white" : "border border-[#d8cbbd] text-[#546d83]"
+    }`;
+  const shown = issue.dueOn
+    ? `${DAYS.find((d) => d.on === issue.dueOn)?.label ?? issue.dueOn}${issue.dueTime ? ` at ${issue.dueTime}` : ""}`
+    : null;
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2 border-t border-[#f0e9df] px-4 py-2.5">
+        <span className="text-sm text-[#546d83]">
+          {shown ? (
+            <>
+              <span className="font-bold text-[#26364d]">{shown}</span>
+              {" · on "}
+              {issue.assignedTo.length ? issue.assignedTo.join(" and ") : "nobody"}&rsquo;s screen
+            </>
+          ) : (
+            "No day set"
+          )}
+        </span>
+        <button
+          onClick={() => setOpen(true)}
+          className="ms-auto rounded-lg border border-[#26364d] px-3 py-1.5 text-sm font-bold text-[#26364d]"
+        >
+          {shown ? "Change" : "Set a day"}
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="border-t border-[#f0e9df] px-4 py-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-[#b8b1a8]">
-          Do it on
-        </span>
+    <div className="border-t border-[#f0e9df] bg-[#faf7f2] px-4 py-3">
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#8a9099]">Which day</p>
+      <div className="mb-3 grid grid-cols-3 gap-1.5">
+        {DAYS.map((d) => (
+          <button key={d.on} onClick={() => setDay(d.on)} className={chip(day === d.on)}>
+            {d.label}
+          </button>
+        ))}
+      </div>
+      <label className="mb-3 flex items-center gap-2 text-sm text-[#546d83]">
+        Other day
         <input
           type="date"
-          value={day}
+          value={DAYS.some((d) => d.on === day) ? "" : day}
           onChange={(e) => setDay(e.target.value)}
-          className="rounded-lg border border-[#d8cbbd] px-2.5 py-1.5 text-sm outline-none focus:border-[#d8b98a]"
+          className="min-w-0 flex-1 rounded-lg border border-[#d8cbbd] bg-white px-3 py-2 text-base outline-none focus:border-[#d8b98a]"
         />
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="rounded-lg border border-[#d8cbbd] px-2.5 py-1.5 text-sm outline-none focus:border-[#d8b98a]"
-        />
+      </label>
+
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#8a9099]">What time</p>
+      <div className="mb-3 grid grid-cols-3 gap-1.5">
+        {TIMES.map((t) => (
+          <button key={t.label} onClick={() => setTime(t.at)} className={chip(time === t.at)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
         <button
-          onClick={() => send({ what: "when", id: issue.id, dueOn: day || null, dueTime: time || null }, issue.id)}
-          disabled={!!busy}
-          className="rounded-lg bg-[#26364d] px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50"
+          onClick={() => {
+            send({ what: "when", id: issue.id, dueOn: day || null, dueTime: day ? time || null : null }, issue.id);
+            setOpen(false);
+          }}
+          disabled={!!busy || !day}
+          className="flex-1 rounded-lg bg-[#26364d] py-3 text-base font-bold text-white disabled:opacity-50"
         >
           Save
         </button>
@@ -738,21 +808,21 @@ function WhenRow({
               setDay("");
               setTime("");
               send({ what: "when", id: issue.id, dueOn: null, dueTime: null }, issue.id);
+              setOpen(false);
             }}
             disabled={!!busy}
-            className="text-xs font-bold uppercase tracking-wider text-[#b9925d] hover:underline disabled:opacity-50"
+            className="rounded-lg border border-[#d8cbbd] px-4 py-3 text-sm font-bold text-[#b9925d] disabled:opacity-50"
           >
             Clear
           </button>
         )}
+        <button
+          onClick={() => setOpen(false)}
+          className="rounded-lg border border-[#d8cbbd] px-4 py-3 text-sm font-bold text-[#8a9099]"
+        >
+          Cancel
+        </button>
       </div>
-      {issue.dueOn && (
-        <p className="mt-1.5 text-xs text-[#546d83]">
-          On {issue.assignedTo.length ? issue.assignedTo.join(" and ") : "nobody"}&rsquo;s screen for{" "}
-          {issue.dueOn}
-          {issue.dueTime ? ` at ${issue.dueTime}` : ""}.
-        </p>
-      )}
     </div>
   );
 }
