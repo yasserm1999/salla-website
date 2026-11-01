@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentStaff } from "@/lib/admin-session";
-import { addItem, move, removeItem, setCount } from "@/lib/stock";
+import { addItem, approveItem, editItem, move, removeItem, setCount, setPhoto } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +36,13 @@ export async function POST(req: Request) {
     return done(
       await addItem({
         name,
+        serial: text(body?.serial, 40),
+        photo: typeof body?.photo === "string" ? body.photo : null,
         unit: text(body?.unit, 30),
         lowAt: body?.lowAt === "" || body?.lowAt == null ? null : qty(body.lowAt),
         quantity: qty(body?.quantity) ?? 0,
         by: staff.name,
+        owner,
       })
     );
   }
@@ -53,13 +56,36 @@ export async function POST(req: Request) {
     return done(await move({ itemId: id, kind: what, quantity, note: text(body?.note), by: staff.name }));
   }
 
+  // Anyone who can add an item can photograph one.
+  if (what === "photo") {
+    if (typeof body?.photo !== "string") return NextResponse.json({ error: "No photo." }, { status: 400 });
+    return done(await setPhoto(id, body.photo));
+  }
+
   if (!owner) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
+
+  if (what === "edit") {
+    const name = text(body?.name, 120);
+    const serial = text(body?.serial, 40);
+    if (!name || !serial) return NextResponse.json({ error: "Name and serial are both needed." }, { status: 400 });
+    return done(
+      await editItem({
+        id,
+        name,
+        serial,
+        unit: text(body?.unit, 30),
+        lowAt: body?.lowAt === "" || body?.lowAt == null ? null : qty(body.lowAt),
+      })
+    );
+  }
 
   if (what === "count") {
     const counted = qty(body?.quantity);
     if (counted === null) return NextResponse.json({ error: "Enter the count." }, { status: 400 });
     return done(await setCount(id, counted, staff.name));
   }
+
+  if (what === "approve") return done(await approveItem(id, staff.name));
 
   if (what === "remove") return done(await removeItem(id, staff.name));
 

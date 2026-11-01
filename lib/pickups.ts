@@ -745,3 +745,15 @@ export async function setArea(input: {
   });
   return e ? fail(e) : done;
 }
+
+/** The whole customer book, for the page where areas are given out. */
+export async function listPeople(): Promise<Person[]> {
+  const db = client();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("salla_people")
+    .select("id, name, phone, address, note, cleancloud_id")
+    .order("name");
+  if (error) return [];
+  return (data ?? []).map((p) => toPerson(p as PersonRow));
+}

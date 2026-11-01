@@ -177,3 +177,9 @@ export function AreaBadge({ personId, cleanCloudId }: Who) {
     </span>
   );
 }
+
+/** The numbers as they stand on this page, including any just set. */
+export function useAreaBook(): { byPerson: Record<string, number>; byCleanCloud: Record<string, number> } {
+  const ctx = useContext(AreaContext);
+  return { byPerson: ctx?.byPerson ?? {}, byCleanCloud: ctx?.byCleanCloud ?? {} };
+}

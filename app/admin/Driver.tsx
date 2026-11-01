@@ -242,6 +242,12 @@ export function Driver({
             Report
           </a>
           <a
+            href="/admin/areas"
+            className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-bold text-[#546d83] active:bg-[#f0e9df]"
+          >
+            Areas
+          </a>
+          <a
             href="/admin/pickups"
             className="rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 active:bg-sky-50"
           >

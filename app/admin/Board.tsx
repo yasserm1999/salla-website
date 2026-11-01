@@ -395,6 +395,14 @@ export function Board({
               </span>
             </button>
           )}
+          {books && (
+            <Link
+              href="/admin/areas"
+              className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+            >
+              Areas
+            </Link>
+          )}
           <Link
             href="/admin/issues"
             className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
