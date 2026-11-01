@@ -1,3 +1,5 @@
+import { Busy } from "./Busy";
+
 /**
  * The shop's own colours, carried into the back office.
  *
@@ -14,6 +16,9 @@
  */
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f7f3ed] text-[#26364d]">{children}</div>
+    <div className="salla-admin min-h-screen overflow-x-hidden bg-[#f7f3ed] text-[#26364d]">
+      {children}
+      <Busy />
+    </div>
   );
 }
