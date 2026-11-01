@@ -1,6 +1,7 @@
 "use client";
 
 import { TaskBlock, type TaskRow } from "./TaskBlock";
+import { PressStrip } from "./PressStrip";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -312,6 +313,7 @@ export function Work({
                             {o.notes && (
                               <p className="mt-1 text-xs font-medium text-[#b9925d]">{o.notes}</p>
                             )}
+                            <PressStrip orderId={o.id} customerId={o.customerID} summary={o.summary} quiet={onRack} />
                           </div>
                           <span className="shrink-0 self-center">
                             <QualityTick

@@ -31,6 +31,8 @@ import { Board } from "./Board";
 import { Driver } from "./Driver";
 import { Work } from "./Work";
 import { AreaProvider } from "./AreaTag";
+import { PressProvider } from "./PressStrip";
+import { pressingFor } from "@/lib/pressing";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Salla — shop dashboard" };
@@ -141,8 +143,12 @@ export default async function AdminPage() {
       figure of money absent rather than hidden.
     */
     if (staff.role === "washer") {
-      const mine = await jobsFor(staff.name);
+      const [mine, pressing] = await Promise.all([
+        jobsFor(staff.name),
+        pressingFor(inShop.map((o) => o.id)),
+      ]);
       return (
+        <PressProvider rows={pressing} me={staff.name} role={staff.role}>
         <Work
           board={{ ...board, windowFrom: from, windowTo: to }}
           worker={staff.name}
@@ -159,6 +165,7 @@ export default async function AdminPage() {
               photoUrl: i.photoUrl,
             }))}
         />
+        </PressProvider>
       );
     }
 
@@ -170,7 +177,11 @@ export default async function AdminPage() {
       The van goes out once. A schedule showing only half of what it has to
       do is a schedule somebody has to hold the other half of in their head.
     */
-    const [pickupBoard, areas] = await Promise.all([loadSpan(today, shiftDay(today, 1)), loadAreas()]);
+    const [pickupBoard, areas, pressing] = await Promise.all([
+      loadSpan(today, shiftDay(today, 1)),
+      loadAreas(),
+      pressingFor(inShop.map((o) => o.id)),
+    ]);
 
     /*
       Orders nobody has read yet. Only the last few days count as news — an
@@ -217,6 +228,7 @@ export default async function AdminPage() {
 
     return (
       <AreaProvider book={areas} canEdit={staff.role === "owner"}>
+      <PressProvider rows={pressing} me={staff.name} role={staff.role}>
       <Board
         board={{ ...board, windowFrom: from, windowTo: to }}
         runs={runs}
@@ -249,6 +261,7 @@ export default async function AdminPage() {
             doneAt: j.doneAt,
           }))}
       />
+      </PressProvider>
       </AreaProvider>
     );
   } catch (e) {

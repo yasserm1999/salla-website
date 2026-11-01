@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import type { Assessed, Board as BoardData, Debt, Run, Summary, Urgency } from "@/lib/cleancloud";
 import type { Concern, RunStatus, StopProgress } from "@/lib/delivery";
 import type { CheckMark } from "@/lib/quality";
-import { AreaTag } from "./AreaTag";
+import { AreaBadge, AreaTag } from "./AreaTag";
+import { PressStrip } from "./PressStrip";
 import { QualityTick, type QualityContext } from "./QualityTick";
 
 const shopDayOf = (d: Date | string) =>
@@ -394,6 +395,14 @@ export function Board({
                 {news.length}
               </span>
             </button>
+          )}
+          {books && (
+            <Link
+              href="/admin/pressing"
+              className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
+            >
+              Pressing
+            </Link>
           )}
           {books && (
             <Link
@@ -856,7 +865,7 @@ export function Board({
                                   <span className="truncate font-medium text-[#26364d]">
                                     {nameOf(item.order)}
                                   </span>
-                                  <Tags customerID={item.order.customerID} orderID={item.order.id} />
+                                  <Tags customerID={item.order.customerID} orderID={item.order.id} editable />
                                 </div>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                   <StateBadges o={item.order} />
@@ -915,7 +924,7 @@ export function Board({
                         <span className="min-w-[10rem] flex-1">
                           <span className="block text-sm font-semibold text-[#26364d]">
                             {nameOf(o)}
-                            <Tags customerID={o.customerID} orderID={o.id} />
+                            <Tags customerID={o.customerID} orderID={o.id} editable />
                           </span>
                           <span className="block truncate text-xs text-[#8a9099]">
                             {o.summary || `${o.pieces} pieces`}
@@ -1080,6 +1089,13 @@ export function Board({
                             onChange={setMark}
                           />
                           </div>
+                          <PressStrip
+                            orderId={o.id}
+                            customerId={o.customerID}
+                            summary={o.summary}
+                            quiet={onRack}
+                            className="mx-4 mb-2"
+                          />
                           {expanded === o.id && <Detail o={o} name={nameOf(o)} tel={telOf(o)} />}
                         </li>
     );
@@ -1454,13 +1470,22 @@ function UnpaidBadge() {
   );
 }
 
-function Tags({ customerID, orderID }: { customerID: string; orderID: string }) {
+function Tags({
+  customerID,
+  orderID,
+  editable = false,
+}: {
+  customerID: string;
+  orderID: string;
+  /** Off where the tags sit inside a tappable row: a button cannot hold a button. */
+  editable?: boolean;
+}) {
   return (
     <span className="ml-1.5 inline-flex shrink-0 items-baseline gap-1 font-mono text-xs font-normal">
       <span className="rounded bg-[#f0e9df] px-1 text-[#546d83]">c{customerID}</span>
       <span className="rounded bg-[#26364d] px-1.5 text-sm font-bold text-white">#{orderID}</span>
       <span className="font-sans">
-        <AreaTag cleanCloudId={customerID} />
+        {editable ? <AreaTag cleanCloudId={customerID} /> : <AreaBadge cleanCloudId={customerID} />}
       </span>
     </span>
   );
