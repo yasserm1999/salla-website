@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentStaff } from "@/lib/admin-session";
-import { allocate, finish, getPressing, undo } from "@/lib/pressing";
+import { allocate, finish, undo } from "@/lib/pressing";
 import { PRESSERS } from "@/lib/press-minutes";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,11 @@ export const dynamic = "force-dynamic";
 /**
  * Allocating an order for pressing, and saying it is done.
  *
- * The owners and the manager allocate. A presser may take an unallocated
- * order for themselves, and presses done on their own; an owner or the
- * manager may press done for them. Only an owner takes a done back.
+ * The owners, the manager and the pressers themselves allocate and press
+ * done. The pressers share one screen in the shop, so whoever is signed in
+ * there must be able to act for either of them — the minutes go to the
+ * person the order is allocated to, not to the account that tapped.
+ * Only an owner takes a done back.
  */
 export async function POST(req: Request) {
   const staff = await currentStaff();
@@ -24,8 +26,8 @@ export async function POST(req: Request) {
   if (!orderId) return NextResponse.json({ error: "Which order?" }, { status: 400 });
 
   const me = staff.name.toLowerCase();
-  const boss = staff.role === "owner" || staff.role === "manager";
-  const presser = PRESSERS.includes(me);
+  const allowed = staff.role === "owner" || staff.role === "manager" || PRESSERS.includes(me);
+  if (!allowed && what !== "undo") return NextResponse.json({ error: "Not allowed." }, { status: 403 });
 
   const done = (res: { ok: true; message: string } | { ok: false; error: string }) =>
     res.ok
@@ -36,13 +38,6 @@ export async function POST(req: Request) {
     const to = body?.to === null ? null : typeof body?.to === "string" ? body.to.toLowerCase() : undefined;
     if (to === undefined || (to !== null && !PRESSERS.includes(to))) {
       return NextResponse.json({ error: "Choose who presses it." }, { status: 400 });
-    }
-    if (!boss) {
-      // A presser can only take a free order for themselves.
-      const current = await getPressing(orderId);
-      if (!presser || to !== me || current?.assignedTo) {
-        return NextResponse.json({ error: "Not allowed." }, { status: 403 });
-      }
     }
     return done(
       await allocate({
@@ -56,10 +51,6 @@ export async function POST(req: Request) {
   }
 
   if (what === "done") {
-    if (!boss) {
-      const current = await getPressing(orderId);
-      if (current?.assignedTo !== me) return NextResponse.json({ error: "This order is not yours." }, { status: 403 });
-    }
     return done(await finish(orderId, me));
   }
 

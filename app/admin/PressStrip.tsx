@@ -68,7 +68,14 @@ export function PressProvider({
 
   return (
     <PressContext.Provider
-      value={{ rows, me: me.toLowerCase(), boss: role === "owner" || role === "manager", owner: role === "owner", act }}
+      value={{
+        rows,
+        me: me.toLowerCase(),
+        // The pressers share one screen, so it acts for either of them.
+        boss: role === "owner" || role === "manager" || PRESSERS.includes(me.toLowerCase()),
+        owner: role === "owner",
+        act,
+      }}
     >
       {children}
     </PressContext.Provider>
