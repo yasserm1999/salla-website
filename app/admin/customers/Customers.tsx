@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CustomerRecord, CustomerSummary } from "@/lib/customers";
+import {
+  ISSUE_REASONS,
+  OUTCOME_LABEL,
+  REASON_LABEL,
+  isIssue,
+  type Outcome,
+} from "@/lib/investigation-outcomes";
 
 /**
  * The customer book.
@@ -22,6 +29,9 @@ export type Row = CustomerRecord & {
   settled: boolean;
   settledBy: string | null;
   settledAt: string | null;
+  /** What they said when contacted, once the case is closed. */
+  outcome: string | null;
+  note: string | null;
 };
 
 const money = (n: number) =>
@@ -77,7 +87,23 @@ export function Customers({
   const nameOf = (id: string) => people[id]?.name ?? `Customer ${id}`;
   const telOf = (id: string) => people[id]?.tel ?? null;
 
-  async function mark(row: Row, close: boolean) {
+  /*
+    Contacted → satisfied, or an issue → its reason → (for Other) what it was.
+    Only one customer's answer is open at a time.
+  */
+  const [asking, setAsking] = useState<{ id: string; step: "result" | "reason" | "other" } | null>(
+    null
+  );
+  const [otherText, setOtherText] = useState("");
+
+  // Why the ones we reached left, across every closed case on this page.
+  const tally = new Map<string, number>();
+  for (const r of settled) {
+    if (isIssue(r.outcome)) tally.set(r.outcome!, (tally.get(r.outcome!) ?? 0) + 1);
+  }
+  const satisfiedCount = settled.filter((r) => r.outcome === "satisfied").length;
+
+  async function mark(row: Row, close: boolean, outcome?: Outcome, note?: string) {
     setBusy(row.id);
     setFailed(null);
     try {
@@ -87,11 +113,17 @@ export function Customers({
         body: JSON.stringify({
           customerId: row.id,
           lastOrderAt: new Date(row.lastOrder).toISOString(),
+          outcome,
+          note,
         }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) setFailed(data?.error ?? "That did not save.");
-      else router.refresh();
+      else {
+        setAsking(null);
+        setOtherText("");
+        router.refresh();
+      }
     } catch {
       setFailed("Could not reach the server.");
     } finally {
@@ -196,14 +228,110 @@ export function Customers({
                       </a>
                     )}
                     <button
-                      onClick={() => mark(row, true)}
+                      onClick={() => {
+                        setOtherText("");
+                        setAsking(asking?.id === row.id ? null : { id: row.id, step: "result" });
+                      }}
                       disabled={busy === row.id}
+                      aria-expanded={asking?.id === row.id}
                       className="rounded-lg bg-[#26364d] px-3 py-2 text-sm font-bold text-white hover:bg-[#3f4f61] disabled:opacity-50"
                     >
-                      {busy === row.id ? "Saving…" : "Case investigated"}
+                      {busy === row.id ? "Saving…" : "Contacted"}
                     </button>
                   </div>
                 </div>
+
+                {asking?.id === row.id && (
+                  <div className="mt-3 rounded-lg border border-[#ece7e1] bg-[#faf7f3] p-3">
+                    {asking.step === "result" && (
+                      <>
+                        <p className="mb-2 text-sm font-semibold text-[#26364d]">How did it go?</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => mark(row, true, "satisfied")}
+                            disabled={busy === row.id}
+                            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                          >
+                            Satisfied
+                          </button>
+                          <button
+                            onClick={() => setAsking({ id: row.id, step: "reason" })}
+                            disabled={busy === row.id}
+                            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800 disabled:opacity-50"
+                          >
+                            Had an issue
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {asking.step === "reason" && (
+                      <>
+                        <p className="mb-2 text-sm font-semibold text-[#26364d]">What was the issue?</p>
+                        <div className="flex flex-wrap gap-2">
+                          {ISSUE_REASONS.map((reason, i) => (
+                            <button
+                              key={reason}
+                              onClick={() =>
+                                reason === "other"
+                                  ? setAsking({ id: row.id, step: "other" })
+                                  : mark(row, true, reason)
+                              }
+                              disabled={busy === row.id}
+                              className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-bold text-red-800 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {i + 1}. {REASON_LABEL[reason]}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => setAsking({ id: row.id, step: "result" })}
+                            className="px-2 text-xs font-semibold text-[#8a9099] hover:text-[#26364d]"
+                          >
+                            ← back
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {asking.step === "other" && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (otherText.trim()) void mark(row, true, "other", otherText.trim());
+                        }}
+                      >
+                        <label className="mb-2 block text-sm font-semibold text-[#26364d]" htmlFor={`other-${row.id}`}>
+                          What was the reason?
+                        </label>
+                        <textarea
+                          id={`other-${row.id}`}
+                          value={otherText}
+                          onChange={(e) => setOtherText(e.target.value)}
+                          rows={2}
+                          maxLength={1000}
+                          autoFocus
+                          className="w-full rounded-lg border border-[#d8cbbd] bg-white px-3 py-2 text-sm text-[#26364d] focus:border-[#b9925d] focus:outline-none"
+                        />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="submit"
+                            disabled={busy === row.id || !otherText.trim()}
+                            className="rounded-lg bg-[#26364d] px-4 py-2 text-sm font-bold text-white hover:bg-[#3f4f61] disabled:opacity-50"
+                          >
+                            {busy === row.id ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAsking({ id: row.id, step: "reason" })}
+                            className="px-2 text-xs font-semibold text-[#8a9099] hover:text-[#26364d]"
+                          >
+                            ← back
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -215,8 +343,21 @@ export function Customers({
               onClick={() => setShowSettled((v) => !v)}
               className="text-xs font-semibold uppercase tracking-wider text-[#8a9099] hover:text-[#26364d]"
             >
-              {showSettled ? "Hide" : "Show"} {settled.length} already investigated
+              {showSettled ? "Hide" : "Show"} {settled.length} already contacted
             </button>
+            {(satisfiedCount > 0 || tally.size > 0) && (
+              <p className="mt-1 text-xs text-[#8a9099]">
+                {satisfiedCount > 0 && <span className="text-emerald-700">{satisfiedCount} satisfied</span>}
+                {[...tally.entries()]
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([o, c]) => (
+                    <span key={o} className="text-red-700">
+                      {" · "}
+                      {c} {(OUTCOME_LABEL[o] ?? o).replace(/^Issue: /, "")}
+                    </span>
+                  ))}
+              </p>
+            )}
             {showSettled && (
               <ul className="mt-2 divide-y divide-[#f0e9df] rounded-xl border border-[#ece7e1] bg-white">
                 {settled.map((row) => (
@@ -226,8 +367,22 @@ export function Customers({
                     <span className="text-xs text-[#8a9099]">
                       {money(row.spent)} · gone {days(row.daysSinceLast)}
                     </span>
+                    {row.outcome && (
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
+                          isIssue(row.outcome)
+                            ? "bg-red-50 text-red-700"
+                            : "bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {OUTCOME_LABEL[row.outcome] ?? row.outcome}
+                      </span>
+                    )}
+                    {row.note && (
+                      <span className="text-xs italic text-[#546d83]">“{row.note}”</span>
+                    )}
                     <span className="ml-auto text-xs text-[#b8b1a8]">
-                      looked at by {row.settledBy}
+                      contacted by {row.settledBy}
                       {row.settledAt && ` on ${new Date(row.settledAt).toLocaleDateString()}`}
                     </span>
                     <button

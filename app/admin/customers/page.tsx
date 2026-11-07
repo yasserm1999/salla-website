@@ -40,6 +40,8 @@ export default async function CustomersPage() {
         settled,
         settledBy: settled ? (mark?.by ?? null) : null,
         settledAt: settled ? (mark?.at ?? null) : null,
+        outcome: settled ? (mark?.outcome ?? null) : null,
+        note: settled ? (mark?.note ?? null) : null,
       };
     });
 

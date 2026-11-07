@@ -29,20 +29,21 @@ export async function POST(req: Request) {
       : null;
 
   /*
-    What they said when we rang. A problem is the one answer worth writing
-    down in their own words, so it is the one that keeps a note.
+    What they said when we rang: satisfied, or an issue with its reason.
+    "Other" is the reason that has to be written in their own words.
   */
   const outcome = OUTCOMES.includes(body?.outcome) ? (body.outcome as Outcome) : null;
-  const note =
+  if (!outcome) {
+    return NextResponse.json({ error: "Choose satisfied or the reason for the issue." }, { status: 400 });
+  }
+  const typed =
     typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 1000) : null;
+  if (outcome === "other" && !typed) {
+    return NextResponse.json({ error: "Write what the other reason was." }, { status: 400 });
+  }
+  const note = outcome === "other" ? typed : null;
 
-  const result = await closeCase(
-    customerId,
-    lastOrderAt,
-    staff.name,
-    outcome,
-    outcome === "had_a_problem" ? note : note
-  );
+  const result = await closeCase(customerId, lastOrderAt, staff.name, outcome, note);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
 
   return NextResponse.json({

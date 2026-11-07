@@ -16,21 +16,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const TABLE = "salla_customer_investigations";
 
-/**
- * What the customer said when somebody rang them.
- *
- * Three answers, because in practice there are three: they mean to come back,
- * they have gone somewhere else, or something went wrong. The third is the one
- * worth the telephone call, so it is the one that carries a note.
- */
-export const OUTCOMES = ["coming_back", "gone_elsewhere", "had_a_problem"] as const;
-export type Outcome = (typeof OUTCOMES)[number];
-
-export const OUTCOME_LABEL: Record<Outcome, string> = {
-  coming_back: "Said they will come back",
-  gone_elsewhere: "Using another laundry",
-  had_a_problem: "Had a problem with us",
-};
+// The answers themselves live in a browser-safe module so the page can show them.
+import { OUTCOMES, type Outcome } from "./investigation-outcomes";
+export { OUTCOMES, type Outcome };
 
 export type Investigation = {
   customerId: string;
@@ -38,7 +26,8 @@ export type Investigation = {
   lastOrderAt: string | null;
   by: string;
   at: string;
-  outcome: Outcome | null;
+  /** An Outcome, or one of the older answers saved before reasons existed. */
+  outcome: string | null;
   note: string | null;
 };
 
@@ -83,7 +72,7 @@ export async function loadInvestigations(): Promise<InvestigationStore> {
       lastOrderAt: row.last_order_at ?? null,
       by: String(row.investigated_by ?? ""),
       at: String(row.investigated_at ?? ""),
-      outcome: (row.outcome as Outcome) ?? null,
+      outcome: (row.outcome as string) ?? null,
       note: (row.note as string) ?? null,
     });
   }
