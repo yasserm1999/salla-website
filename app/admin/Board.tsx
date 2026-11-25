@@ -398,6 +398,14 @@ export function Board({
           )}
           {books && (
             <Link
+              href="/admin/office"
+              className="rounded-lg border-2 border-[#26364d] bg-[#26364d] px-3 py-2 text-sm font-bold text-white hover:bg-[#3f4f61]"
+            >
+              Office
+            </Link>
+          )}
+          {books && (
+            <Link
               href="/admin/pressing"
               className="rounded-lg border border-[#d8cbbd] px-3 py-2 text-sm font-semibold text-[#546d83] hover:border-[#d8b98a] hover:text-[#b9925d]"
             >
