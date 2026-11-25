@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { AgendaItem } from "@/lib/meeting";
+import type { AgendaItem, AgendaStat } from "@/lib/meeting";
 import type { Mood } from "@/lib/office";
 
 /**
@@ -24,6 +24,29 @@ const BAR: Record<Mood, string> = {
   busy: "border-amber-400",
   calm: "border-emerald-400",
 };
+
+const FIGURE: Record<Mood, string> = {
+  alert: "text-red-600",
+  busy: "text-amber-600",
+  calm: "text-emerald-700",
+};
+
+/** The figures of one point, big enough to read from across the room. */
+export function StatTiles({ stats, indent = true }: { stats: AgendaStat[]; indent?: boolean }) {
+  return (
+    <div className={`mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 ${indent ? "ps-10" : ""}`}>
+      {stats.map((s) => (
+        <div key={s.label} className="rounded-lg border border-[#ece7e1] bg-white px-3 py-2">
+          <p className="truncate text-[11px] font-bold uppercase tracking-wider text-[#8a9099]">{s.label}</p>
+          <p className={`text-xl font-black tabular-nums leading-tight sm:text-2xl ${s.mood ? FIGURE[s.mood] : "text-[#26364d]"}`}>
+            {s.value}
+          </p>
+          {s.sub && <p className="truncate text-xs text-[#8a9099]">{s.sub}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function AgendaBoard({
   agenda,
@@ -66,7 +89,7 @@ export function AgendaBoard({
                     <span className={`h-2.5 w-2.5 rounded-full ${LIGHT[item.mood]}`} />
                     <span className="text-xs text-[#8a9099]">{presenters[item.presenter] ?? ""}</span>
                   </span>
-                  <span className="mt-0.5 block text-sm leading-relaxed text-[#3f4f61]">{item.headline}</span>
+                  <span className="mt-0.5 block text-sm font-semibold text-[#3f4f61]">{item.headline}</span>
                 </span>
                 {item.lines.length > 0 && (
                   <span className="shrink-0 text-xs font-semibold text-[#546d83]">
@@ -74,6 +97,8 @@ export function AgendaBoard({
                   </span>
                 )}
               </button>
+
+              {item.stats.length > 0 && <StatTiles stats={item.stats} />}
 
               {expanded && (
                 <div className="mt-2 ps-10">

@@ -38,6 +38,9 @@ import type { Mood } from "./office";
 
 export type AgendaLine = { text: string; detail?: string; mood?: Mood };
 
+/** A figure to read at a glance: the number big, what it is small. */
+export type AgendaStat = { label: string; value: string; sub?: string; mood?: Mood };
+
 export type AgendaItem = {
   key: string;
   number: number;
@@ -45,8 +48,10 @@ export type AgendaItem = {
   /** Which desk presents it in the meeting. */
   presenter: string;
   mood: Mood;
-  /** What the presenter says, in a sentence or two. */
+  /** What the presenter says: one short sentence, the figures are in stats. */
   headline: string;
+  /** The numbers, as tiles. */
+  stats: AgendaStat[];
   lines: AgendaLine[];
   /** A caveat about where the figures come from, when one is owed. */
   note?: string;
@@ -257,12 +262,28 @@ async function deliveryAccuracy(
     headline:
       average === null
         ? scored.length + unscored.length === 0
-          ? `No deliveries were marked done yesterday${unmarked.length ? `, though ${plural(unmarked.length, "was", "were")} promised` : ""}.`
-          : "Nothing yesterday had a promised time to score against."
-        : `Yesterday's delivery accuracy was ${average}% across ${plural(scored.length, "stop")}. ` +
-          `${scored.filter((s) => s.score === 100).length} right on time` +
-          `${scored.some((s) => s.score === 0) ? `, ${scored.filter((s) => s.score === 0).length} more than two hours out` : ""}.` +
-          (unmarked.length ? ` ${plural(unmarked.length, "delivery", "deliveries")} never marked.` : ""),
+          ? "No deliveries were marked done yesterday."
+          : "Nothing yesterday had a promised time to score."
+        : `Delivery accuracy ${average}% yesterday.`,
+    stats: [
+      {
+        label: "Accuracy",
+        value: average === null ? "—" : `${average}%`,
+        mood: average === null ? undefined : average >= 80 ? "calm" : average >= 60 ? "busy" : "alert",
+      },
+      { label: "On time", value: `${scored.filter((s) => s.score === 100).length}`, sub: `of ${plural(scored.length, "stop")}` },
+      {
+        label: "Late or early",
+        value: `${scored.filter((s) => s.score < 100).length}`,
+        mood: scored.some((s) => s.score < 50) ? "alert" : scored.some((s) => s.score < 100) ? "busy" : undefined,
+      },
+      {
+        label: "Not marked",
+        value: `${unmarked.length + failed.size + missedJobs.length}`,
+        sub: failed.size ? `${failed.size} failed` : undefined,
+        mood: unmarked.length + failed.size + missedJobs.length ? "busy" : undefined,
+      },
+    ],
     lines,
     note:
       "On time = inside the promised window or within 15 minutes of it (100%). Up to 30 min out 75%, up to 1 hour 50%, up to 2 hours 25%, beyond that 0%. Times are the driver's own taps in his app.",
@@ -293,20 +314,21 @@ async function sales(yesterday: string, history: Order[]): Promise<AgendaItem> {
     presenter: "billing",
     mood: change !== null && change <= -20 ? "alert" : change !== null && change < 0 ? "busy" : "calm",
     headline:
-      `Yesterday we sold ${money(amount)} from ${plural(sold.length, "order")}` +
-      (sold.length ? `, ${money(amount / sold.length)} an order on average` : "") +
-      `. ${money(taken.amount)} actually came in from ${plural(taken.count, "payment")}.` +
-      (change !== null
-        ? ` That is ${change >= 0 ? "up" : "down"} ${Math.abs(change)}% on the ${weekday} before (${money(before)}).`
-        : ""),
-    lines: [
-      { text: `Sold (orders written)`, detail: `${money(amount)} · ${plural(sold.length, "order")}` },
-      { text: `Taken (payments received)`, detail: `${money(taken.amount)} · ${plural(taken.count, "payment")}` },
+      change === null
+        ? `We sold ${money(amount)} yesterday.`
+        : `Sales ${change >= 0 ? "up" : "down"} ${Math.abs(change)}% on last ${weekday}.`,
+    stats: [
+      { label: "Sold", value: money(amount), sub: plural(sold.length, "order") },
+      { label: "Received", value: money(taken.amount), sub: plural(taken.count, "payment") },
+      { label: "Average order", value: sold.length ? money(amount / sold.length) : "—" },
       {
-        text: `${weekday} the week before`,
-        detail: `${money(before)} · ${plural(lastWeek.length, "order")}`,
-        mood: change !== null && change < 0 ? "busy" : "calm",
+        label: `vs last ${weekday}`,
+        value: change === null ? "—" : `${change >= 0 ? "▲" : "▼"} ${Math.abs(change)}%`,
+        sub: `was ${money(before)}`,
+        mood: change === null ? undefined : change <= -20 ? "alert" : change < 0 ? "busy" : "calm",
       },
+    ],
+    lines: [
       ...biggest.map((o) => ({
         text: `Biggest: #${o.id} — ${money(o.total)}`,
         detail: o.summary ?? undefined,
@@ -329,13 +351,16 @@ function inventory(stock: { ready: boolean; reason?: string; items: StockItem[] 
     presenter: "supplies",
     mood: out.length ? "alert" : low.length ? "busy" : "calm",
     headline: !stock.ready
-      ? "I could not read the stock list this morning."
+      ? "I could not read the stock list."
       : out.length
-        ? `${plural(out.length, "item")} run out: ${out.map((i) => i.name).join(", ")}.` +
-          (low.length ? ` ${plural(low.length, "more")} running low.` : "")
+        ? `${plural(out.length, "item")} run out — buy today.`
         : low.length
-          ? `Nothing has run out. ${plural(low.length, "item")} at the reorder level: ${low.map((i) => i.name).join(", ")}.`
-          : "Nothing is missing and nothing is at its reorder level.",
+          ? `Nothing missing, ${low.length} running low.`
+          : "Nothing missing.",
+    stats: [
+      { label: "Run out", value: `${out.length}`, mood: out.length ? "alert" : "calm" },
+      { label: "Running low", value: `${low.length}`, mood: low.length ? "busy" : "calm" },
+    ],
     lines: [
       ...out.map((i) => ({ text: `${i.name} — none left`, detail: "buy today", mood: "alert" as Mood })),
       ...low.map((i) => ({
@@ -363,10 +388,16 @@ function machines(issues: Issue[], now: Date): AgendaItem {
     title: "Machine faults",
     presenter: "quality",
     mood: open.some((i) => !i.assignedTo.length) ? "alert" : open.length ? "busy" : "calm",
-    headline: open.length
-      ? `${plural(open.length, "machine fault")} still open` +
-        `${open.some((i) => !i.assignedTo.length) ? `, ${open.filter((i) => !i.assignedTo.length).length} with nobody on it` : ""}.`
-      : `No machine faults are open.${fixedLately.length ? ` ${plural(fixedLately.length, "was", "were")} fixed yesterday.` : ""}`,
+    headline: open.length ? `${plural(open.length, "machine fault")} open.` : "No machine faults.",
+    stats: [
+      { label: "Open faults", value: `${open.length}`, mood: open.length ? "alert" : "calm" },
+      {
+        label: "Nobody on it",
+        value: `${open.filter((i) => !i.assignedTo.length).length}`,
+        mood: open.some((i) => !i.assignedTo.length) ? "alert" : undefined,
+      },
+      { label: "Fixed yesterday", value: `${fixedLately.length}` },
+    ],
     lines: [
       ...open.map((i) => ({
         text: i.description,
@@ -445,10 +476,6 @@ async function messages(yesterday: string, today: string): Promise<AgendaItem> {
   const unanswered = rings.filter((r) => !r.ackAt);
   const slow = rings.filter((r) => r.ackAt && (Date.parse(r.ackAt) - Date.parse(r.at)) / 60000 > 5);
 
-  const parts = [
-    feedback.length ? `${plural(feedback.length, "feedback message")} on the website` : "no feedback on the website",
-    rings.length ? `${plural(rings.length, "ring")} of the door bell` : null,
-  ].filter(Boolean);
 
   return {
     key: "messages",
@@ -457,10 +484,22 @@ async function messages(yesterday: string, today: string): Promise<AgendaItem> {
     presenter: "customer",
     mood: complaints.length || unanswered.length ? "alert" : slow.length ? "busy" : "calm",
     headline:
-      `Yesterday we had ${parts.join(" and ")}.` +
-      (complaints.length ? ` ${plural(complaints.length, "of them is a complaint", "of them are complaints")}.` : "") +
-      (unanswered.length ? ` ${plural(unanswered.length, "bell ring")} nobody answered.` : "") +
-      (!complaints.length && !unanswered.length && (feedback.length || rings.length) ? " Nothing unanswered and no complaints." : ""),
+      complaints.length || unanswered.length
+        ? [
+            complaints.length ? plural(complaints.length, "complaint") : null,
+            unanswered.length ? `${unanswered.length} unanswered` : null,
+          ]
+            .filter(Boolean)
+            .join(", ") + " yesterday."
+        : feedback.length || rings.length
+          ? "No complaints, nothing unanswered."
+          : "No messages yesterday.",
+    stats: [
+      { label: "Feedback", value: `${feedback.length}`, sub: "on the website" },
+      { label: "Complaints", value: `${complaints.length}`, mood: complaints.length ? "alert" : "calm" },
+      { label: "Bell rings", value: `${rings.length}` },
+      { label: "Unanswered", value: `${unanswered.length}`, mood: unanswered.length ? "alert" : "calm" },
+    ],
     lines: [
       ...complaints.map((f) => ({
         text: `Complaint from ${f.name ?? "a customer"} — quality ${f.quality}/5, service ${f.service}/5`,
@@ -507,11 +546,22 @@ function lateOrders(board: Board, names: Record<string, string>): AgendaItem {
     title: "Late orders",
     presenter: "orders",
     mood: late.length ? "alert" : "calm",
-    headline: late.length
-      ? `${plural(late.length, "order is", "orders are")} late and still not washed, worth ${money(
-          late.reduce((s, o) => s + o.total, 0)
-        )}.`
-      : "No orders are late.",
+    headline: late.length ? `${plural(late.length, "order")} late.` : "No orders late.",
+    stats: [
+      { label: "Late orders", value: `${late.length}`, mood: late.length ? "alert" : "calm" },
+      { label: "Worth", value: money(late.reduce((s, o) => s + o.total, 0)) },
+      ...(late.length
+        ? [
+            {
+              label: "Most late",
+              // An order past its hour today is late by hours, not days.
+              value: ((d: number) => (d > 0 ? plural(d, "day") : "today"))(
+                late.reduce((w, o) => Math.max(w, o.daysUntilDue !== null ? -o.daysUntilDue : 0), 0)
+              ),
+            },
+          ]
+        : []),
+    ],
     lines: late.map((o) => ({
       text: `#${o.id} ${name(o)}`,
       detail: [
@@ -554,11 +604,16 @@ async function pressing(yesterday: string, today: string): Promise<{ item: Agend
       title: "Basel and Sonu — pressing time",
       presenter: "pressing",
       mood: !report.ready ? "busy" : total === 0 ? "busy" : "calm",
-      headline: !report.ready
-        ? "I could not read the pressing records."
-        : `Yesterday ` +
-          people.map((p) => `${p.name} pressed ${hm(p.minutes)} (${plural(p.orders, "order")})`).join(" and ") +
-          `. ${hm(total)} in all.`,
+      headline: !report.ready ? "I could not read the pressing records." : `${hm(total)} of pressing yesterday.`,
+      stats: [
+        ...people.map((p) => ({
+          label: p.name,
+          value: hm(p.minutes),
+          sub: plural(p.orders, "order"),
+          mood: (p.minutes === 0 ? "busy" : undefined) as Mood | undefined,
+        })),
+        { label: "Total", value: hm(total) },
+      ],
       lines: people.map((p) => ({
         text: `${p.name}: ${hm(p.minutes)} pressed yesterday`,
         detail:

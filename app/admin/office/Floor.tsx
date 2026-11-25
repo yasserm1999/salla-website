@@ -3,16 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { Desk, Mood } from "@/lib/office";
 import type { AgendaItem } from "@/lib/meeting";
-import { AgendaBoard } from "./AgendaBoard";
+import { AgendaBoard, StatTiles } from "./AgendaBoard";
 
 /**
  * The office, seen from above and in front, like a doll's house.
  *
  * Every worker has their own desk — computer, keyboard, a mug, a chair, and
  * the thing their job needs: the till for billing, the iron for pressing, the
- * van keys for deliveries. They sit at it, get up to walk to where their work
- * is, and come back. How often they get up follows their light: red rushes,
- * green mostly sits.
+ * van keys for deliveries. They stay at it; their light and the colour of
+ * their screen say how their corner of the shop is doing.
  *
  * The morning meeting walks everybody into the meeting room and goes through
  * the owner's agenda, each point presented by the worker whose corner it is,
@@ -29,17 +28,6 @@ import { AgendaBoard } from "./AgendaBoard";
 
 type Spot = { x: number; y: number };
 
-/** Where people stand to use the shop's things. */
-const PLACES = {
-  machines: { x: 51, y: 21 },
-  ironing: { x: 72, y: 26 },
-  shelves: { x: 88, y: 21 },
-  door: { x: 94, y: 62 },
-  counter: { x: 18, y: 87 },
-} as const;
-
-type Place = keyof typeof PLACES;
-
 type Look = { shirt: string; trousers: string; skin: string; hair: string; long?: boolean };
 
 type Prop =
@@ -53,59 +41,50 @@ type Prop =
   | "chart"
   | "magnifier";
 
-/** Each worker's desk, where their errands take them, what is on the desk, and what they look like. */
-const SEATING: Record<string, { desk: Spot; errand: Place | "rounds"; prop: Prop; look: Look }> = {
+/** Each worker's desk, what is on it, and what they look like. */
+const SEATING: Record<string, { desk: Spot; prop: Prop; look: Look }> = {
   manager: {
     desk: { x: 60, y: 96 },
-    errand: "rounds",
     prop: "plant",
     look: { shirt: "#26364d", trousers: "#1f2937", skin: "#c68863", hair: "#1c1917" },
   },
   orders: {
     desk: { x: 48, y: 47 },
-    errand: "machines",
     prop: "tickets",
     look: { shirt: "#c2410c", trousers: "#334155", skin: "#e0ac85", hair: "#3f2a1d" },
   },
   pressing: {
     desk: { x: 67, y: 47 },
-    errand: "ironing",
     prop: "iron",
     look: { shirt: "#0f766e", trousers: "#1f2937", skin: "#b07650", hair: "#111827" },
   },
   supplies: {
     desk: { x: 86, y: 47 },
-    errand: "shelves",
     prop: "boxes",
     look: { shirt: "#0e7490", trousers: "#475569", skin: "#d39b74", hair: "#57381f" },
   },
   billing: {
     desk: { x: 10, y: 73 },
-    errand: "counter",
     prop: "till",
     look: { shirt: "#b45309", trousers: "#1f2937", skin: "#f1c6a3", hair: "#6b3f1d", long: true },
   },
   customer: {
     desk: { x: 26.5, y: 73 },
-    errand: "counter",
     prop: "phone",
     look: { shirt: "#be185d", trousers: "#334155", skin: "#c68863", hair: "#111827", long: true },
   },
   marketing: {
     desk: { x: 43, y: 73 },
-    errand: "counter",
     prop: "chart",
     look: { shirt: "#4f46e5", trousers: "#1e293b", skin: "#e8b48f", hair: "#2b1d14" },
   },
   quality: {
     desk: { x: 60, y: 73 },
-    errand: "machines",
     prop: "magnifier",
     look: { shirt: "#7c3aed", trousers: "#1e293b", skin: "#8d5a3b", hair: "#111827", long: true },
   },
   delivery: {
     desk: { x: 77, y: 73 },
-    errand: "door",
     prop: "keys",
     look: { shirt: "#15803d", trousers: "#374151", skin: "#a8714d", hair: "#1c1917" },
   },
@@ -122,14 +101,11 @@ const DESK_W = 13; // percent of the room's width
 /** Sitting at the desk: just behind it, so the desk hides the legs. */
 const atDesk = (d: Spot): Spot => ({ x: d.x + 2.2, y: d.y - 4.5 });
 
-/** How likely a worker is to get up on any tick, by how much is on their desk. */
-const RESTLESS: Record<Mood, number> = { alert: 0.5, busy: 0.28, calm: 0.1 };
 /** How long a walk takes, in milliseconds. Red work is walked to faster. */
 const PACE: Record<Mood, number> = { alert: 1400, busy: 2000, calm: 2600 };
 
 const LIGHT: Record<Mood, string> = { alert: "#dc2626", busy: "#f59e0b", calm: "#10b981" };
 
-const TICK_MS = 2600;
 const TURN_MS = 9000;
 
 /** Further forward is drawn on top. */
@@ -169,11 +145,6 @@ export function Floor({
   const meeting = turn !== null;
   const timers = useRef<number[]>([]);
 
-  const walkersRef = useRef(walkers);
-  useEffect(() => {
-    walkersRef.current = walkers;
-  }, [walkers]);
-
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };
@@ -192,34 +163,12 @@ export function Floor({
     );
   };
 
-  // ── The working day ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (meeting) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const id = window.setInterval(() => {
-      for (const d of seated) {
-        if (Math.random() > RESTLESS[d.mood]) continue;
-        const me = walkersRef.current[d.key];
-        if (!me || me.moving) continue;
-        const seat = SEATING[d.key];
-        if (me.away) {
-          send(d.key, home(d.key), false, d.mood);
-        } else if (seat.errand === "rounds") {
-          // The manager walks the floor, stopping beside somebody's desk.
-          const others = seated.filter((o) => o.key !== d.key);
-          const desk = SEATING[others[Math.floor(Math.random() * others.length)].key].desk;
-          send(d.key, { x: desk.x + DESK_W / 2 + 2, y: desk.y }, true, d.mood);
-        } else {
-          const p = PLACES[seat.errand];
-          send(d.key, { x: p.x + (Math.random() * 8 - 4), y: p.y + Math.random() * 3 }, true, d.mood);
-        }
-      }
-    }, TICK_MS);
-    return () => window.clearInterval(id);
-    // seated is rebuilt each render from desks; the desks themselves are what matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meeting, desks]);
+  /*
+    Outside the meeting everybody stays at their own desk. They used to get
+    up and walk to the machines or the counter, but the owner wants to see
+    each worker in their place, so the only walking is to the meeting room
+    and back.
+  */
 
   // ── The meeting ─────────────────────────────────────────────────────
   const points = agenda.filter((a) => byKey.has(a.presenter));
@@ -487,7 +436,8 @@ export function Floor({
                   {paused ? " · paused" : ""}
                 </span>
               </p>
-              <p className="mt-1 text-sm leading-relaxed text-[#26364d]">{said}</p>
+              <p className="mt-1 text-base font-semibold text-[#26364d]">{said}</p>
+              {point && point.stats.length > 0 && <StatTiles stats={point.stats} indent={false} />}
             </>
           )}
         </div>
