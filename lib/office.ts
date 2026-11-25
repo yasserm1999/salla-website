@@ -3,6 +3,7 @@ import type { CustomerRecord } from "./customers";
 import type { Job } from "./pickups";
 import type { Issue } from "./issues";
 import type { StockItem } from "./stock";
+import type { PressingSummary } from "./meeting";
 
 /**
  * The virtual office.
@@ -66,6 +67,7 @@ export type OfficeInput = {
   stock: { ready: boolean; reason?: string; items: StockItem[] };
   lapsed: CustomerRecord[];
   people: Map<string, CustomerBrief>;
+  pressing: PressingSummary;
 };
 
 /** Days on the rack before a customer is reminded, and before it is worrying. */
@@ -476,6 +478,37 @@ function marketingDesk(i: OfficeInput): Desk {
   };
 }
 
+const hm = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h ? `${h}h ${m}m` : `${m} min`;
+};
+
+function pressingDesk(i: OfficeInput): Desk {
+  const p = i.pressing;
+  const idle = p.people.filter((x) => x.holding === 0);
+  return {
+    key: "pressing",
+    title: "Pressing Supervisor",
+    role: "Keeps count of Basel and Sonu's pressing",
+    badge: "PS",
+    mood: !p.ready ? "busy" : idle.length === p.people.length ? "busy" : "calm",
+    headline: !p.ready
+      ? "Could not read the pressing records."
+      : `Yesterday ${p.people.map((x) => `${x.name} ${hm(x.minutes)}`).join(", ")}. ` +
+        `Waiting now: ${p.people.map((x) => `${x.name} ${plural(x.holding, "order")}`).join(", ")}.`,
+    tasks: p.people.map((x) => ({
+      id: `press-${x.name}`,
+      text: `${x.name}: ${hm(x.minutes)} pressed yesterday`,
+      detail:
+        `${plural(x.orders, "order")} finished` +
+        (x.holding ? ` · ${plural(x.holding, "order")} with him now (${hm(x.holdingMinutes)})` : " · nothing allocated now — give him work"),
+      mood: x.holding ? "calm" : "busy",
+      href: "/admin/pressing",
+    })),
+  };
+}
+
 /**
  * The manager reads every other desk and says the day in a few lines.
  *
@@ -521,6 +554,7 @@ export function buildOffice(i: OfficeInput): Desk[] {
     suppliesDesk(i),
     complaintsDesk(i),
     marketingDesk(i),
+    pressingDesk(i),
   ];
   return [managerDesk(desks, i), ...desks];
 }

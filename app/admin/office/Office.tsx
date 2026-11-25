@@ -4,6 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { whatsappNumber, type Desk, type Mood, type Task } from "@/lib/office";
+import type { AgendaItem } from "@/lib/meeting";
+import { Floor } from "./Floor";
+import { AgendaBoard } from "./AgendaBoard";
 
 /**
  * The office floor: one desk per worker, the manager's at the top.
@@ -30,16 +33,21 @@ const button =
 
 export function Office({
   desks,
+  agenda,
   generatedAt,
   admin,
 }: {
   desks: Desk[];
+  agenda: AgendaItem[];
   generatedAt: string;
   admin: string;
 }) {
   const router = useRouter();
   const [lang, setLang] = useState<"ar" | "en">("ar");
+  const [view, setView] = useState<"floor" | "list">("floor");
+  const [selected, setSelected] = useState<string | null>(null);
   const [manager, ...floor] = desks;
+  const picked = desks.find((d) => d.key === selected) ?? null;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -58,6 +66,19 @@ export function Office({
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="flex overflow-hidden rounded-lg border border-[#d8cbbd] text-sm font-semibold">
+            {(["floor", "list"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-2 ${
+                  view === v ? "bg-[#26364d] text-white" : "text-[#546d83] hover:text-[#b9925d]"
+                }`}
+              >
+                {v === "floor" ? "Floor" : "List"}
+              </button>
+            ))}
+          </div>
           <div className="flex overflow-hidden rounded-lg border border-[#d8cbbd] text-sm font-semibold">
             {(["ar", "en"] as const).map((l) => (
               <button
@@ -81,13 +102,32 @@ export function Office({
         </div>
       </header>
 
-      <DeskCard desk={manager} lang={lang} wide />
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {floor.map((d) => (
-          <DeskCard key={d.key} desk={d} lang={lang} />
-        ))}
-      </div>
+      {view === "floor" ? (
+        <>
+          {picked && (
+            <div className="mb-4">
+              {/* Keyed so a new worker opens fresh rather than inheriting "show all". */}
+              <DeskCard key={picked.key} desk={picked} lang={lang} wide />
+            </div>
+          )}
+          <Floor desks={desks} agenda={agenda} selected={selected} onSelect={setSelected} />
+        </>
+      ) : (
+        <>
+          <AgendaBoard
+            agenda={agenda}
+            current={null}
+            presenters={Object.fromEntries(desks.map((d) => [d.key, d.title]))}
+          />
+          <div className="mt-4" />
+          <DeskCard desk={manager} lang={lang} wide />
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {floor.map((d) => (
+              <DeskCard key={d.key} desk={d} lang={lang} />
+            ))}
+          </div>
+        </>
+      )}
 
       <p className="mt-6 text-xs text-[#8a9099]">
         The workers read CleanCloud and the shop&apos;s own lists each time this page opens. They

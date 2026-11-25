@@ -15,7 +15,8 @@ import {
 } from "@/lib/cleancloud";
 import { buildCustomers, lapsedCustomers } from "@/lib/customers";
 import { loadInvestigations, isSettled } from "@/lib/investigations";
-import { loadSpan, shiftDay } from "@/lib/pickups";
+import { loadSpan, shiftDay, knownNames } from "@/lib/pickups";
+import { buildAgenda, type AgendaItem } from "@/lib/meeting";
 import { loadIssues } from "@/lib/issues";
 import { loadStock } from "@/lib/stock";
 import { buildOffice, peopleWanted, type Desk } from "@/lib/office";
@@ -42,6 +43,7 @@ export default async function OfficePage() {
   const { from } = defaultWindow(now);
 
   let desks: Desk[];
+  let agenda: AgendaItem[];
   try {
     const history = await fetchOrders(FROM_THE_BEGINNING, today);
     // The dashboard's own window, so both pages count the same orders.
@@ -66,9 +68,26 @@ export default async function OfficePage() {
       (r) => !(cases.ready && isSettled(cases.marks.get(r.id), r.lastOrder))
     );
 
-    const people = await fetchCustomers(peopleWanted(board, runs, debts, lapsed, today));
+    const [people, names] = await Promise.all([
+      fetchCustomers(peopleWanted(board, runs, debts, lapsed, today)),
+      knownNames(),
+    ]);
+    // Names the shop has saved, topped up with any just fetched from CleanCloud.
+    for (const [id, p] of people) if (p.name && !names[id]) names[id] = p.name;
+
+    const meeting = await buildAgenda({
+      now,
+      today,
+      history,
+      board,
+      stock: { ready: stock.ready, reason: stock.ready ? undefined : stock.reason, items: stock.items },
+      issues: issues.issues,
+      names,
+    });
+    agenda = meeting.agenda;
 
     desks = buildOffice({
+      pressing: meeting.pressing,
       now,
       today,
       board,
@@ -109,5 +128,5 @@ export default async function OfficePage() {
     );
   }
 
-  return <Office desks={desks} generatedAt={now.toISOString()} admin={staff.name} />;
+  return <Office desks={desks} agenda={agenda} generatedAt={now.toISOString()} admin={staff.name} />;
 }
