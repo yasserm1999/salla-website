@@ -2,19 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Desk, Mood } from "@/lib/office";
-import type { AgendaItem, AgendaLine, AgendaStat } from "@/lib/meeting";
+import type { AgendaItem, AgendaStat } from "@/lib/meeting";
 import { AgendaBoard, StatTiles } from "./AgendaBoard";
-import {
-  canListen,
-  chime,
-  forSpeaking,
-  listen,
-  parseCommand,
-  speakDetails,
-  speakPoint,
-  voiceFor,
-  type Command,
-} from "./voice";
+import { useMeeting, type LogLine, type Phase } from "./useMeeting";
 
 /**
  * The office, seen from above and in front, like a doll's house.
@@ -117,7 +107,6 @@ const PACE: Record<Mood, number> = { alert: 1400, busy: 2000, calm: 2600 };
 
 const LIGHT: Record<Mood, string> = { alert: "#dc2626", busy: "#f59e0b", calm: "#10b981" };
 
-const TURN_MS = 9000;
 
 /** Further forward is drawn on top. */
 const depth = (y: number) => Math.round(y * 10);
@@ -136,7 +125,6 @@ export function Floor({
   onSelect: (key: string | null) => void;
 }) {
   const seated = desks.filter((d) => SEATING[d.key]);
-  const byKey = new Map(seated.map((d) => [d.key, d]));
   const home = (key: string) => atDesk(SEATING[key].desk);
   const titles = Object.fromEntries(desks.map((d) => [d.key, d.title]));
 
@@ -147,15 +135,10 @@ export function Floor({
   );
 
   /*
-    The meeting: null when everybody is working, otherwise the step. Step -1
-    is everybody walking in; 0 is the manager opening; 1..n are the agenda
-    points; n+1 is the manager closing.
+    Everybody stays at their own desk; the only walking is to the meeting
+    room and back, which the meeting asks for when it starts and ends.
   */
-  const [turn, setTurn] = useState<number | null>(null);
-  const [paused, setPaused] = useState(false);
-  const meeting = turn !== null;
   const timers = useRef<number[]>([]);
-
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };
@@ -174,184 +157,23 @@ export function Floor({
     );
   };
 
-  /*
-    Outside the meeting everybody stays at their own desk. They used to get
-    up and walk to the machines or the counter, but the owner wants to see
-    each worker in their place, so the only walking is to the meeting room
-    and back.
-  */
-
-  // ── The meeting ─────────────────────────────────────────────────────
-  const points = agenda.filter((a) => byKey.has(a.presenter));
-  const closing = points.length + 1;
-
-  /*
-    Sound and voice. `sound` reads every point aloud; `listening` lets the
-    owner answer back; `drive` is the big-button screen for the car. `replay`
-    bumps to say the current point again, and `detail` reads its details
-    instead of its summary.
-  */
-  const [sound, setSound] = useState(true);
-  const [listening, setListening] = useState(false);
-  const [drive, setDrive] = useState(false);
-  const [replay, setReplay] = useState(0);
-  const [detail, setDetail] = useState(false);
-  const [heard, setHeard] = useState<string | null>(null);
-  const [micProblem, setMicProblem] = useState<string | null>(null);
-  const audio = useRef<AudioContext | null>(null);
-
-  const synth = () => (typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null);
-
-  const startMeeting = (inCar = false) => {
-    onSelect(null);
-    setPaused(false);
-    setDetail(false);
-    setHeard(null);
-    setMicProblem(null);
-    /*
-      Sound has to be started by a tap — browsers, iPhones especially, refuse
-      to make noise a page decided on by itself. This tap is that permission,
-      for the chime and for the voices both.
-    */
-    try {
-      audio.current ??= new AudioContext();
-      void audio.current.resume();
-      chime(audio.current, [660, 880, 1320]);
-    } catch {
-      // No Web Audio: the meeting simply has no chime.
-    }
-    synth()?.speak(new SpeechSynthesisUtterance(" "));
-    if (inCar) {
-      setDrive(true);
-      setSound(true);
-      setListening(canListen());
-    }
-    setTurn(-1);
-    seated.forEach((d, i) => send(d.key, CHAIRS[i % CHAIRS.length], true, "busy"));
-    later(() => setTurn(0), 2600);
-  };
-
-  const endMeeting = () => {
-    synth()?.cancel();
-    setTurn(null);
-    setDrive(false);
-    setListening(false);
-    setDetail(false);
-    seated.forEach((d) => send(d.key, home(d.key), false, "calm"));
-  };
-
-  const goTo = (n: number) => {
-    setDetail(false);
-    setPaused(false);
-    setTurn(n);
-  };
-  const next = () => turn !== null && (turn >= closing ? endMeeting() : goTo(Math.max(0, turn + 1)));
-  const back = () => turn !== null && turn > 0 && goTo(turn - 1);
-  const repeat = () => {
-    setDetail(false);
-    setPaused(false);
-    setReplay((r) => r + 1);
-  };
-  const details = () => {
-    setDetail(true);
-    setPaused(false);
-    setReplay((r) => r + 1);
-  };
-
-  const point = turn !== null && turn >= 1 && turn <= points.length ? points[turn - 1] : null;
-  const speakerKey =
-    turn === null || turn < 0 ? null : point ? point.presenter : "manager";
-  const said =
-    turn === null || turn < 0
-      ? null
-      : turn === 0
-        ? `Good morning, everyone. We have ${points.length} things to go through: ${points
-            .map((p) => p.title.toLowerCase())
-            .join(", ")}.`
-        : point
-          ? point.headline
-          : "That's everything. Thank you — back to work!";
-
-  /*
-    Each turn: chime, then the speaker reads their point, then a breath, then
-    the next. Without sound it falls back to a fixed time per point.
-  */
-  useEffect(() => {
-    if (turn === null || turn < 0 || paused) return;
-    const advance = () => {
-      if (turn >= closing) endMeeting();
-      else goTo(turn + 1);
-    };
-    const voice = synth();
-    if (!sound || !voice) {
-      const id = window.setTimeout(advance, TURN_MS);
-      return () => window.clearTimeout(id);
-    }
-
-    voice.cancel();
-    const text = detail && point ? speakDetails(point) : point ? speakPoint(point) : forSpeaking(said ?? "");
-    const who = seated.findIndex((d) => d.key === speakerKey);
-    const { voice: v, pitch } = voiceFor(Math.max(0, who));
-    const u = new SpeechSynthesisUtterance(text);
-    if (v) u.voice = v;
-    u.lang = v?.lang ?? "en-GB";
-    u.pitch = pitch;
-    u.rate = 1;
-
-    let over = false;
-    const ids: number[] = [];
-    const finished = () => {
-      if (over) return;
-      over = true;
-      ids.push(window.setTimeout(advance, 1200));
-    };
-    u.onend = finished;
-    u.onerror = finished;
-
-    if (point && !detail) chime(audio.current);
-    ids.push(window.setTimeout(() => voice.speak(u), point && !detail ? 450 : 0));
-    // Some browsers never say they have finished a long sentence; do not wait for ever.
-    ids.push(window.setTimeout(finished, Math.max(TURN_MS, text.length * 95)));
-
-    return () => {
-      over = true;
-      ids.forEach((id) => window.clearTimeout(id));
-      voice.cancel();
-    };
-    // The text is derived from turn and detail; the functions are rebuilt each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turn, paused, closing, sound, replay, detail]);
-
-  // What the owner says back. The handler is refreshed every render so it always acts on the current point.
-  const onCommand = useRef<(c: Command) => void>(() => {});
-  useEffect(() => {
-    onCommand.current = (c) => {
-      if (c === "next") next();
-      else if (c === "back") back();
-      else if (c === "repeat") repeat();
-      else if (c === "details") details();
-      else if (c === "pause") {
-        synth()?.cancel();
-        setPaused(true);
-      } else if (c === "resume") setPaused(false);
-      else if (c === "end") endMeeting();
-    };
+  // ── The meeting: speaking, listening and answering live in useMeeting ──
+  const m = useMeeting({
+    desks: seated,
+    agenda,
+    onWalkIn: () => {
+      onSelect(null);
+      seated.forEach((d, i) => send(d.key, CHAIRS[i % CHAIRS.length], true, "busy"));
+    },
+    onWalkOut: () => seated.forEach((d) => send(d.key, home(d.key), false, "calm")),
   });
-
-  useEffect(() => {
-    if (!listening || !meeting) return;
-    return listen(
-      (text) => {
-        const c = parseCommand(text);
-        setHeard(c ? `“${text.trim()}” → ${c}` : `“${text.trim()}”`);
-        if (c) onCommand.current(c);
-      },
-      (problem) => {
-        setMicProblem(problem);
-        setListening(false);
-      }
-    );
-  }, [listening, meeting]);
+  const [drive, setDrive] = useState(false);
+  const meeting = m.turn !== null;
+  const point = m.point;
+  const points = m.points;
+  // Whoever is talking right now — the point's owner, or whoever answers a question.
+  const speakerKey = m.phase === "speaking" ? (m.caption?.key ?? null) : null;
+  const said = speakerKey ? (m.caption?.text ?? null) : null;
 
   // In the car the screen must not go dark halfway through the meeting.
   useEffect(() => {
@@ -369,19 +191,24 @@ export function Floor({
   const control =
     "rounded-lg border border-[#d8cbbd] bg-white px-3 py-2 text-sm font-semibold text-[#546d83] disabled:opacity-40";
 
+  const talking = m.phase === "listening" || m.phase === "hearing" || m.phase === "thinking";
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {!meeting ? (
           <>
             <button
-              onClick={() => startMeeting()}
+              onClick={() => void m.start()}
               className="rounded-lg bg-[#26364d] px-4 py-2 text-sm font-bold text-white hover:bg-[#3f4f61]"
             >
               Start the morning meeting
             </button>
             <button
-              onClick={() => startMeeting(true)}
+              onClick={() => {
+                setDrive(true);
+                void m.start(true);
+              }}
               className="rounded-lg border-2 border-[#26364d] bg-white px-4 py-2 text-sm font-bold text-[#26364d] hover:bg-[#f8f1e7]"
             >
               🚗 Drive mode
@@ -389,72 +216,102 @@ export function Floor({
           </>
         ) : (
           <>
-            <button onClick={back} disabled={turn === null || turn <= 0} className={control}>
+            <button onClick={m.back} disabled={(m.turn ?? 0) <= 0} className={control}>
               Back
             </button>
-            <button onClick={() => setPaused((p) => !p)} disabled={turn === null || turn < 0} className={control}>
-              {paused ? "Carry on" : "Pause"}
+            <button onClick={m.pause} disabled={(m.turn ?? -1) < 0} className={control}>
+              {m.paused ? "Carry on" : "Pause"}
             </button>
-            <button onClick={repeat} disabled={turn === null || turn < 0} className={control}>
+            <button onClick={m.repeat} disabled={(m.turn ?? -1) < 0} className={control}>
               Repeat
             </button>
-            <button onClick={details} disabled={!point} className={control}>
+            <button onClick={m.details} disabled={!point} className={control}>
               Details
             </button>
-            <button onClick={next} className={control}>
+            <button onClick={m.next} className={control}>
               Next
             </button>
             <button onClick={() => setDrive(true)} className={control}>
               🚗 Drive mode
             </button>
-            <button onClick={endMeeting} className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+            <button onClick={m.stop} className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
               End meeting
             </button>
           </>
         )}
-        <button onClick={() => setSound((s) => !s)} className={control} aria-pressed={sound}>
-          {sound ? "🔊 Sound on" : "🔇 Sound off"}
+        <button
+          onClick={() => (talking ? m.stopTalking() : void m.talk())}
+          className={`rounded-lg px-4 py-2 text-sm font-bold ${
+            talking ? "bg-red-600 text-white" : "bg-[#d8b98a] text-[#26364d] hover:bg-[#cfa978]"
+          }`}
+        >
+          {m.phase === "hearing" ? "🎤 Hearing you…" : m.phase === "thinking" ? "💭 Thinking…" : m.phase === "listening" ? "🎤 Listening…" : "🎤 Talk to the office"}
         </button>
-        {meeting && canListen() && (
-          <button
-            onClick={() => {
-              setMicProblem(null);
-              setListening((l) => !l);
-            }}
-            className={`${control} ${listening ? "border-red-400 text-red-700" : ""}`}
-            aria-pressed={listening}
-          >
-            {listening ? "🎤 Listening" : "🎤 Talk to the meeting"}
-          </button>
-        )}
-        {!meeting && <span className="text-xs text-[#8a9099]">Tap anyone to see their work.</span>}
+        <button onClick={m.toggleMic} className={control} aria-pressed={m.micOn} title="When on, the meeting waits after each point for your questions">
+          {m.micOn ? "Mic on" : "Mic off"}
+        </button>
+        <button onClick={m.toggleSound} className={control} aria-pressed={m.sound}>
+          {m.sound ? "🔊 Sound on" : "🔇 Sound off"}
+        </button>
+        <div className="flex overflow-hidden rounded-lg border border-[#d8cbbd] text-sm font-semibold" title="The language you speak to the office in">
+          {(["en", "ar"] as const).map((l) => (
+            <button
+              key={l}
+              onClick={() => m.setLang(l)}
+              className={`px-3 py-2 ${m.lang === l ? "bg-[#26364d] text-white" : "text-[#546d83] hover:text-[#b9925d]"}`}
+            >
+              {l === "en" ? "Speak English" : "تكلم عربي"}
+            </button>
+          ))}
+        </div>
       </div>
-      {meeting && (listening || micProblem || heard) && (
-        <p className="-mt-1 mb-3 text-xs text-[#546d83]">
-          {micProblem ??
-            `Say: next · back · repeat · details · pause · continue · end${heard ? ` — heard ${heard}` : ""}`}
+      {m.hearing && (
+        <p className="-mt-1 mb-3 rounded-lg bg-[#f8f1e7] px-3 py-2 text-sm font-semibold text-[#26364d]" dir="auto">
+          🎤 {m.hearing}
+        </p>
+      )}
+      {(m.problem || !m.brain) && (
+        <p className="-mt-1 mb-3 text-xs text-[#8a6d3b]">
+          {m.problem ?? "Conversation is off until ANTHROPIC_API_KEY is added — the meeting still runs and follows simple commands."}
+        </p>
+      )}
+      {m.voiceName && (
+        <p className="-mt-2 mb-3 text-[11px] text-[#8a9099]">
+          Voice: {m.voiceName}
+          {/natural|neural|premium|enhanced|google|siri/i.test(m.voiceName) ? "" : " — for a more natural voice, see the tip below the agenda."}
         </p>
       )}
 
-      {drive && meeting && (
+      {drive && (
         <DriveScreen
-          title={point ? `${point.number}. ${point.title}` : turn === -1 ? "Starting…" : turn === 0 ? "Good morning" : "That's everything"}
-          speaker={speakerKey ? titles[speakerKey] : ""}
-          headline={turn !== null && turn < 0 ? "Everyone is walking to the meeting room…" : (said ?? "")}
+          meeting={meeting}
+          title={
+            point
+              ? `${point.number}. ${point.title}`
+              : m.turn === -1
+                ? "Starting…"
+                : m.turn === 0
+                  ? "Good morning"
+                  : meeting
+                    ? "That's everything"
+                    : "Talk to the office"
+          }
           progress={point ? `Point ${point.number} of ${points.length}` : ""}
-          stats={point && !detail ? point.stats : []}
-          lines={point && detail ? point.lines.slice(0, 6) : []}
-          paused={paused}
-          listening={listening}
-          heard={micProblem ?? heard}
-          onBack={back}
-          onNext={next}
-          onRepeat={repeat}
-          onDetails={details}
-          onPause={() => setPaused((p) => !p)}
-          onListen={() => setListening((l) => !l)}
+          stats={point && !m.detail ? point.stats : []}
+          log={m.log}
+          hearing={m.hearing}
+          phase={m.phase}
+          paused={m.paused}
+          micOn={m.micOn}
+          onStart={() => void m.start(true)}
+          onBack={m.back}
+          onNext={m.next}
+          onRepeat={m.repeat}
+          onDetails={m.details}
+          onPause={m.pause}
+          onTalk={() => (talking ? m.stopTalking() : void m.talk())}
           onLeave={() => setDrive(false)}
-          onEnd={endMeeting}
+          onEnd={m.stop}
         />
       )}
 
@@ -630,28 +487,59 @@ export function Floor({
         </div>
       </div>
 
-      {/* What is being said, readable at any size */}
-      {meeting && (
+      {/* The conversation, readable at any size */}
+      {(meeting || m.log.length > 0) && (
         <div className="mt-3 rounded-xl border-2 border-[#d8b98a] bg-[#f8f1e7] p-3" aria-live="polite">
-          {turn === -1 ? (
-            <p className="text-sm text-[#546d83]">Everyone is walking to the meeting room…</p>
-          ) : (
-            <>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#b9925d]">
-                {speakerKey ? titles[speakerKey] : ""}
-                <span className="ms-2 font-normal normal-case text-[#8a9099]">
-                  {point ? `point ${point.number} of ${points.length}` : turn === 0 ? "opening" : "closing"}
-                  {paused ? " · paused" : ""}
+          <p className="text-xs font-bold uppercase tracking-wider text-[#b9925d]">
+            {m.turn === -1
+              ? "Everyone is walking to the meeting room…"
+              : point
+                ? `Point ${point.number} of ${points.length} · ${point.title}`
+                : meeting
+                  ? m.turn === 0
+                    ? "Opening"
+                    : "Closing"
+                  : "Conversation"}
+            <span className="ms-2 font-normal normal-case text-[#8a9099]">
+              {m.paused ? "paused" : m.phase === "listening" ? "your turn — ask anything" : m.phase === "hearing" ? "hearing you…" : m.phase === "thinking" ? "thinking…" : ""}
+            </span>
+          </p>
+          {point && !m.detail && point.stats.length > 0 && <StatTiles stats={point.stats} indent={false} />}
+          <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+            {m.log.slice(-8).map((l, i) => (
+              <li key={i} className={`text-sm ${l.key === null && l.who === "You" ? "text-right" : ""}`}>
+                <span className={`font-bold ${l.who === "You" ? "text-[#b9925d]" : "text-[#26364d]"}`}>{l.who}: </span>
+                <span className="text-[#3f4f61]" dir="auto">
+                  {l.text}
                 </span>
-              </p>
-              <p className="mt-1 text-base font-semibold text-[#26364d]">{said}</p>
-              {point && point.stats.length > 0 && <StatTiles stats={point.stats} indent={false} />}
-            </>
-          )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
       <AgendaBoard agenda={agenda} current={point?.key ?? null} presenters={titles} />
+
+      <details className="mt-3 rounded-xl border border-[#ece7e1] bg-white px-4 py-3 text-sm text-[#3f4f61]">
+        <summary className="cursor-pointer font-semibold text-[#26364d]">Tip: getting the most natural voices</summary>
+        <p className="mt-2">
+          The workers speak with the best voice your device has. Claude does the thinking; the sound comes from the
+          device itself, so a better device voice means a more human meeting.
+        </p>
+        <ul className="mt-2 list-disc space-y-1 ps-5">
+          <li>
+            <b>iPhone:</b> Settings → Accessibility → Spoken Content → Voices → English (and Arabic) → download a voice
+            marked <i>Enhanced</i> or <i>Premium</i>. The office picks it automatically.
+          </li>
+          <li>
+            <b>Android:</b> use Chrome, and in Settings → Text-to-speech choose Google&apos;s engine and download the
+            high-quality English and Arabic voices.
+          </li>
+          <li>
+            <b>Computer:</b> Microsoft Edge has very natural &ldquo;Online (Natural)&rdquo; voices, Arabic included.
+          </li>
+        </ul>
+      </details>
 
       <style>{`
         @keyframes office-leg-a { 0%,100% { transform: rotate(22deg); } 50% { transform: rotate(-22deg); } }
@@ -680,30 +568,48 @@ export function Floor({
 
 /**
  * The meeting for the car: the whole screen, a few words in huge type, and
- * buttons big enough to hit without looking. The voice carries the meeting;
- * this is only there for a glance at a red light.
+ * buttons big enough to hit without looking. The voices carry the meeting and
+ * the owner talks back; this is only there for a glance at a red light.
  */
 function DriveScreen(p: {
+  meeting: boolean;
   title: string;
-  speaker: string;
-  headline: string;
   progress: string;
   stats: AgendaStat[];
-  lines: AgendaLine[];
+  log: LogLine[];
+  hearing: string;
+  phase: Phase;
   paused: boolean;
-  listening: boolean;
-  heard: string | null;
+  micOn: boolean;
+  onStart: () => void;
   onBack: () => void;
   onNext: () => void;
   onRepeat: () => void;
   onDetails: () => void;
   onPause: () => void;
-  onListen: () => void;
+  onTalk: () => void;
   onLeave: () => void;
   onEnd: () => void;
 }) {
-  const big = "rounded-2xl py-5 text-xl font-black active:scale-95 transition-transform";
+  const big = "rounded-2xl py-5 text-xl font-black active:scale-95 transition-transform disabled:opacity-40";
   const tone: Record<Mood, string> = { alert: "text-red-400", busy: "text-amber-300", calm: "text-emerald-300" };
+  const last = p.log.slice(-3);
+  const talking = p.phase === "listening" || p.phase === "hearing" || p.phase === "thinking";
+  const state =
+    p.phase === "listening"
+      ? "🎤 Listening — ask anything, or say “next”"
+      : p.phase === "hearing"
+        ? "🎤 Hearing you…"
+        : p.phase === "thinking"
+          ? "💭 Thinking…"
+          : p.phase === "speaking"
+            ? "🔊 Speaking — tap Talk to interrupt"
+            : p.paused
+              ? "Paused"
+              : p.micOn
+                ? ""
+                : "Tap Talk to speak to the office";
+
   return (
     <div className="fixed inset-0 z-[5000] flex flex-col bg-[#1b2738] p-4 text-white sm:p-8">
       <div className="flex items-center justify-between text-sm text-white/60">
@@ -714,11 +620,9 @@ function DriveScreen(p: {
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-3 overflow-hidden py-4">
-        <p className="text-sm font-bold uppercase tracking-widest text-[#d8b98a]">{p.speaker}</p>
         <h2 className="text-3xl font-black leading-tight sm:text-5xl">{p.title}</h2>
-        <p className="text-xl font-semibold leading-snug text-white/90 sm:text-3xl">{p.headline}</p>
         {p.stats.length > 0 && (
-          <div className="mt-2 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {p.stats.map((s) => (
               <div key={s.label} className="rounded-xl bg-white/10 px-4 py-3">
                 <p className="truncate text-xs font-bold uppercase tracking-wider text-white/60">{s.label}</p>
@@ -728,36 +632,44 @@ function DriveScreen(p: {
             ))}
           </div>
         )}
-        {p.lines.length > 0 && (
-          <ul className="mt-2 space-y-2 overflow-y-auto text-lg">
-            {p.lines.map((l, i) => (
-              <li key={i} className="rounded-xl bg-white/10 px-4 py-2">
-                <span className={`font-bold ${l.mood ? tone[l.mood] : ""}`}>{l.text}</span>
-                {l.detail && <span className="block text-sm text-white/60">{l.detail}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="mt-1 space-y-2 overflow-y-auto">
+          {last.map((l, i) => (
+            <li key={i} className={`rounded-xl px-4 py-2 text-lg ${l.who === "You" ? "bg-[#d8b98a]/20" : "bg-white/10"}`} dir="auto">
+              <span className="block text-xs font-bold uppercase tracking-wider text-[#d8b98a]">{l.who}</span>
+              <span className="line-clamp-3 font-semibold">{l.text}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
-      <p className="mb-2 min-h-5 text-center text-sm text-white/60">
-        {p.listening
-          ? `🎤 Listening — say “next”, “repeat”, “details”, “pause” or “end”${p.heard ? ` · heard ${p.heard}` : ""}`
-          : (p.heard ?? "")}
-      </p>
-      <div className="grid grid-cols-3 gap-3">
-        <button onClick={p.onBack} className={`${big} bg-white/15`}>Back</button>
-        <button onClick={p.onPause} className={`${big} bg-white/15`}>{p.paused ? "Play" : "Pause"}</button>
-        <button onClick={p.onNext} className={`${big} bg-[#d8b98a] text-[#1b2738]`}>Next</button>
-        <button onClick={p.onRepeat} className={`${big} bg-white/15`}>Repeat</button>
-        <button onClick={p.onDetails} className={`${big} bg-white/15`}>Details</button>
-        <button onClick={p.onListen} className={`${big} ${p.listening ? "bg-red-600" : "bg-white/15"}`}>
-          {p.listening ? "🎤 On" : "🎤 Off"}
-        </button>
-      </div>
-      <button onClick={p.onEnd} className="mt-3 rounded-2xl border border-white/30 py-3 text-lg font-bold text-white/80">
-        End meeting
+      {p.hearing && (
+        <p className="mb-2 rounded-xl bg-[#d8b98a]/20 px-4 py-3 text-center text-xl font-bold" dir="auto">
+          “{p.hearing}”
+        </p>
+      )}
+      <p className="mb-2 min-h-5 text-center text-base font-semibold text-white/80">{state}</p>
+      <button
+        onClick={p.onTalk}
+        className={`${big} mb-3 w-full py-7 text-2xl ${talking ? "bg-red-600" : "bg-[#d8b98a] text-[#1b2738]"}`}
+      >
+        {talking ? "■ Stop" : "🎤 Talk"}
       </button>
+      {p.meeting ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <button onClick={p.onBack} className={`${big} bg-white/15`}>Back</button>
+            <button onClick={p.onPause} className={`${big} bg-white/15`}>{p.paused ? "Play" : "Pause"}</button>
+            <button onClick={p.onNext} className={`${big} bg-white/15`}>Next</button>
+            <button onClick={p.onRepeat} className={`${big} bg-white/15`}>Repeat</button>
+            <button onClick={p.onDetails} className={`${big} bg-white/15`}>Details</button>
+            <button onClick={p.onEnd} className={`${big} bg-red-900/60`}>End</button>
+          </div>
+        </>
+      ) : (
+        <button onClick={p.onStart} className={`${big} w-full bg-white/15`}>
+          Start the morning meeting
+        </button>
+      )}
     </div>
   );
 }

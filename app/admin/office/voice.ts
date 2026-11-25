@@ -2,11 +2,10 @@
  * The meeting's voice: a chime, the workers reading their points aloud, and
  * the owner talking back.
  *
- * Everything here is the browser's own — speechSynthesis to talk,
- * SpeechRecognition to listen, Web Audio for the chime — so it costs nothing
- * and nothing leaves the phone except what the browser itself sends to
- * recognise speech. Chrome on Android and Safari on iPhone both have it;
- * where a browser lacks listening, the buttons still work.
+ * Speaking and listening are the browser's own — speechSynthesis to talk,
+ * SpeechRecognition to listen, Web Audio for the chime. The only outside
+ * service is Claude, which understands and answers. Chrome on Android and
+ * Safari on iPhone both listen; where a browser cannot, the buttons work.
  *
  * Built for the drive to work: the meeting can be run without looking at the
  * screen, so the spoken words carry the numbers the tiles show.
@@ -14,7 +13,7 @@
 
 import type { AgendaItem } from "@/lib/meeting";
 
-export type Command = "next" | "back" | "repeat" | "pause" | "resume" | "details" | "end";
+export type Command = "next" | "back" | "repeat" | "pause" | "resume" | "details" | "end" | "arabic" | "english";
 
 /**
  * What was heard, as a command, or null.
@@ -38,6 +37,8 @@ export function parseCommand(heard: string): Command | null {
   if (is("continue", "carry on", "resume", "go ahead", "play", "كمل", "استمر")) return "resume";
   if (is("details", "more", "tell me more", "more details", "which ones", "explain", "تفاصيل", "اكثر")) return "details";
   if (is("end", "end meeting", "stop meeting", "finish", "stop", "that's all", "انهي", "خلاص")) return "end";
+  if (is("arabic", "speak arabic", "in arabic", "عربي", "بالعربي", "عربي لو سمحت")) return "arabic";
+  if (is("english", "speak english", "in english", "انجليزي", "إنجليزي", "بالانجليزي", "بالإنجليزي")) return "english";
   return null;
 }
 
@@ -73,17 +74,69 @@ export function speakDetails(item: AgendaItem): string {
   return forSpeaking(`Details. ${lines}.${more}`);
 }
 
+// ── Voices ─────────────────────────────────────────────────────────────
+
 /**
- * A voice for each worker. English voices are shared out in turn, and the
- * pitch moves a little either way, so the same voice still sounds like
- * different people round the table.
+ * How natural a voice sounds, judged from its name.
+ *
+ * Every phone and computer carries a robotic default and, often, much better
+ * voices beside it: Edge's "Online (Natural)" voices, Chrome's "Google"
+ * voices, iPhone "Enhanced" and "Premium" voices. Those are picked first.
  */
-export function voiceFor(index: number): { voice: SpeechSynthesisVoice | undefined; pitch: number } {
-  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"));
-  return {
-    voice: voices.length ? voices[index % voices.length] : undefined,
-    pitch: [1, 0.85, 1.15, 0.95, 1.25, 0.8, 1.1, 0.9, 1.2][index % 9],
-  };
+function naturalness(v: SpeechSynthesisVoice): number {
+  const n = v.name.toLowerCase();
+  let s = 0;
+  if (/natural|neural/.test(n)) s += 8;
+  if (/premium/.test(n)) s += 7;
+  if (/enhanced/.test(n)) s += 6;
+  if (/online/.test(n)) s += 3;
+  if (/google/.test(n)) s += 4;
+  if (/siri/.test(n)) s += 5;
+  // Novelty voices are never a colleague.
+  if (/bad news|bells|boing|bubbles|cellos|whisper|zarvox|trinoids|organ|superstar|wobble|jester|albert|bahh/.test(n)) s -= 20;
+  return s;
+}
+
+export function voicesFor(lang: "en" | "ar"): SpeechSynthesisVoice[] {
+  if (typeof window === "undefined" || !window.speechSynthesis) return [];
+  const all = window.speechSynthesis.getVoices();
+  const wanted = all.filter((v) => v.lang.toLowerCase().startsWith(lang));
+  // Gulf voices first for Arabic, British then American for English.
+  const local = (v: SpeechSynthesisVoice) =>
+    lang === "ar"
+      ? /ar[-_](om|ae|sa|qa|kw|bh)/i.test(v.lang) ? 1 : 0
+      : /en[-_]gb/i.test(v.lang) ? 1 : /en[-_]us/i.test(v.lang) ? 0.5 : 0;
+  return wanted.sort((a, b) => naturalness(b) + local(b) - (naturalness(a) + local(a)));
+}
+
+/** Voices load a moment after the page; wait for them once. */
+export function voicesReady(): Promise<void> {
+  if (typeof window === "undefined" || !window.speechSynthesis) return Promise.resolve();
+  if (window.speechSynthesis.getVoices().length) return Promise.resolve();
+  return new Promise((res) => {
+    const done = () => res();
+    window.speechSynthesis.addEventListener("voiceschanged", done, { once: true });
+    window.setTimeout(done, 1500);
+  });
+}
+
+/**
+ * A voice for each worker: the best natural voices are shared out in turn so
+ * the people round the table sound different. Pitch is left alone — bending
+ * it is what makes good voices sound robotic.
+ */
+export function voiceFor(index: number, lang: "en" | "ar"): SpeechSynthesisVoice | undefined {
+  const list = voicesFor(lang);
+  if (!list.length) return undefined;
+  const best = naturalness(list[0]);
+  // Only voices nearly as good as the best are used, however many workers there are.
+  const good = list.filter((v) => naturalness(v) >= best - 2);
+  return good[index % good.length];
+}
+
+/** The name of the voice in use, so the owner can tell what the device offers. */
+export function bestVoiceName(lang: "en" | "ar"): string | null {
+  return voicesFor(lang)[0]?.name ?? null;
 }
 
 /** A two-note chime: the meeting opening, or a new point. */
@@ -105,74 +158,25 @@ export function chime(ctx: AudioContext | null, notes = [880, 1320]) {
   });
 }
 
-type Recognition = {
+// ── Listening ──────────────────────────────────────────────────────────
+
+export type Recognition = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
+  maxAlternatives: number;
   onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onspeechstart: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   start: () => void;
   stop: () => void;
+  abort: () => void;
 };
 
-export function canListen(): boolean {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as Record<string, unknown>;
-  return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
-}
-
-/**
- * Listen until told to stop. Browsers end a recognition session after a
- * silence, so it is restarted for as long as listening is wanted.
- */
-export function listen(
-  onHeard: (text: string) => void,
-  onProblem: (message: string) => void
-): () => void {
+/** The browser's speech recogniser, where it has one. */
+export function recogniser(): (new () => Recognition) | null {
+  if (typeof window === "undefined") return null;
   const w = window as unknown as Record<string, new () => Recognition>;
-  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-  if (!Ctor) {
-    onProblem("This browser cannot listen. Use the buttons instead.");
-    return () => {};
-  }
-
-  let wanted = true;
-  const rec = new Ctor();
-  rec.lang = "en-GB";
-  rec.continuous = true;
-  rec.interimResults = false;
-  rec.onresult = (e) => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) onHeard(e.results[i][0].transcript);
-    }
-  };
-  rec.onerror = (e) => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-      wanted = false;
-      onProblem("The microphone was not allowed. Allow it in the browser to talk to the meeting.");
-    }
-  };
-  rec.onend = () => {
-    if (!wanted) return;
-    try {
-      rec.start();
-    } catch {
-      // Already starting again; nothing to do.
-    }
-  };
-  try {
-    rec.start();
-  } catch {
-    onProblem("The microphone could not be started.");
-  }
-
-  return () => {
-    wanted = false;
-    try {
-      rec.stop();
-    } catch {
-      // Already stopped.
-    }
-  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
